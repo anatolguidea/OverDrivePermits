@@ -10,10 +10,11 @@ export interface OrderRow {
   destination: string | null
   route_states: string[]
   trip_date: string | null
+  notes: string | null
   created_at: string
   updated_at: string
   customers: { id: string; name: string; usdot: string | null }
-  vehicles: { id: string; unit_number: string; vehicle_type: VehicleType } | null
+  vehicles: { id: string; unit_number: string; vehicle_type: VehicleType; make: string | null; year: number | null } | null
   permits: Array<{ state_code: string; status: PermitStatus; cost: number | null }>
   invoices: Array<{ id: string; status: InvoiceStatus; total_amount: number }>
 }
@@ -36,9 +37,9 @@ export interface OrdersPage {
 }
 
 const ORDER_SELECT = `
-  id, order_number, status, origin, destination, route_states, trip_date, created_at, updated_at,
+  id, order_number, status, origin, destination, route_states, trip_date, notes, created_at, updated_at,
   customers ( id, name, usdot ),
-  vehicles ( id, unit_number, vehicle_type ),
+  vehicles ( id, unit_number, vehicle_type, make, year ),
   permits ( state_code, status, cost ),
   invoices ( id, status, total_amount )
 `
