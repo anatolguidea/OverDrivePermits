@@ -1,19 +1,24 @@
-import { Suspense } from 'react'
 import { createClient } from '@/lib/supabase/server'
-import { Skeleton } from '@/components/ui/skeleton'
+import { findOrders } from '@/lib/repositories/orders.repo'
+import { HydrationBoundary, QueryClient, dehydrate } from '@tanstack/react-query'
+import { ordersQueryKey } from '@/lib/queries/useOrders'
+import { OrdersTableWithFilters } from '@/components/admin/orders/OrdersTableWithFilters'
 
 export const metadata = { title: 'Dashboard — OSW Permits Admin' }
 
 export default async function DashboardPage() {
   const supabase = await createClient()
+  const queryClient = new QueryClient()
 
   const [ordersRes, customersRes, invoicesRes] = await Promise.all([
     supabase.from('orders').select('id, status'),
     supabase.from('customers').select('id'),
-    supabase
-      .from('invoices')
-      .select('total_amount, status')
-      .eq('status', 'paid'),
+    supabase.from('invoices').select('total_amount, status').eq('status', 'paid'),
+    // Prefetch first page of orders into TanStack Query cache
+    queryClient.prefetchQuery({
+      queryKey: ordersQueryKey({ status: 'all', page: 1, page_size: 25 }),
+      queryFn: () => findOrders(supabase, { status: 'all', page: 1, page_size: 25 }),
+    }),
   ])
 
   const activeOrders = ordersRes.data?.filter((o) => o.status === 'active').length ?? 0
@@ -24,26 +29,26 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold tracking-tight">Dashboard</h2>
-        <p className="text-muted-foreground">Active Orders at a glance</p>
+        <h2 className="text-2xl font-bold tracking-tight">Active Orders</h2>
+        <p className="text-sm text-muted-foreground">
+          Real-time view of all permit orders
+        </p>
       </div>
 
-      {/* Stats row */}
+      {/* Stats */}
       <div className="grid gap-4 sm:grid-cols-3">
-        <StatCard label="Active Orders" value={activeOrders} />
-        <StatCard label="Total Customers" value={totalCustomers} />
+        <StatCard label="Active Orders"    value={activeOrders} />
+        <StatCard label="Total Customers"  value={totalCustomers} />
         <StatCard
           label="Revenue (Paid)"
           value={`$${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2 })}`}
         />
       </div>
 
-      {/* Orders table placeholder — Phase 2 */}
-      <Suspense fallback={<Skeleton className="h-64 w-full" />}>
-        <p className="text-sm text-muted-foreground">
-          Orders table coming in Phase 2 — dashboard shell is live.
-        </p>
-      </Suspense>
+      {/* Orders table — hydrated from server prefetch */}
+      <HydrationBoundary state={dehydrate(queryClient)}>
+        <OrdersTableWithFilters />
+      </HydrationBoundary>
     </div>
   )
 }
