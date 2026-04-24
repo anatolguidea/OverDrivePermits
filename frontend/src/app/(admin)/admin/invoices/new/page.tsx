@@ -8,7 +8,11 @@ import type { OrderOption } from '@/components/admin/invoices/InvoiceForm'
 
 export const metadata = { title: 'New Invoice — OSW Permits Admin' }
 
-export default async function NewInvoicePage() {
+export default async function NewInvoicePage({
+  searchParams,
+}: {
+  searchParams: { order_id?: string }
+}) {
   const supabase = await createClient()
 
   const [customersResult, ordersResult] = await Promise.all([
@@ -36,6 +40,18 @@ export default async function NewInvoicePage() {
     customer_id: o.customer_id,
   }))
 
+  // Pre-populate form if coming from an order
+  let initialOrderId: string | undefined
+  let initialCustomerId: string | undefined
+
+  if (searchParams.order_id) {
+    const linkedOrder = orders.find((o) => o.id === searchParams.order_id)
+    if (linkedOrder) {
+      initialOrderId = linkedOrder.id
+      initialCustomerId = linkedOrder.customer_id
+    }
+  }
+
   return (
     <div className="max-w-3xl space-y-6">
       <Button variant="ghost" size="sm" asChild className="-ml-2">
@@ -51,7 +67,12 @@ export default async function NewInvoicePage() {
         </p>
       </div>
 
-      <InvoiceForm customers={customers} orders={orders} />
+      <InvoiceForm
+        customers={customers}
+        orders={orders}
+        initialCustomerId={initialCustomerId}
+        initialOrderId={initialOrderId}
+      />
     </div>
   )
 }

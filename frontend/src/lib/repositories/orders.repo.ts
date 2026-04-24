@@ -70,6 +70,9 @@ export async function findOrders(
   if (date_to) {
     query = query.lte('trip_date', date_to)
   }
+  if (search) {
+    query = query.ilike('order_number', `%${search}%`)
+  }
 
   const { data, error, count } = await query
 

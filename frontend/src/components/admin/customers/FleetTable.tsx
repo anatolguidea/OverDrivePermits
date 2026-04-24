@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
@@ -124,12 +124,14 @@ export function FleetTable({ customerId, initialVehicles }: FleetTableProps) {
                   <TableCell className="font-mono text-xs">{v.vin ?? '—'}</TableCell>
                   <TableCell className="text-sm">{v.plate_number ?? '—'}</TableCell>
                   <TableCell>
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100">
                       <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(v)}>
                         <Pencil className="h-3.5 w-3.5" />
+                        <span className="sr-only">Edit vehicle {v.unit_number}</span>
                       </Button>
                       <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setDeleteTarget(v)}>
                         <Trash2 className="h-3.5 w-3.5" />
+                        <span className="sr-only">Delete vehicle {v.unit_number}</span>
                       </Button>
                     </div>
                   </TableCell>
@@ -189,8 +191,7 @@ function VehicleDialog({ open, onOpenChange, customerId, vehicle, onSaved }: Veh
     },
   })
 
-  // Reset form when vehicle changes
-  useState(() => {
+  useEffect(() => {
     form.reset({
       unit_number:  vehicle?.unit_number  ?? '',
       vehicle_type: vehicle?.vehicle_type ?? 'truck',
@@ -199,7 +200,7 @@ function VehicleDialog({ open, onOpenChange, customerId, vehicle, onSaved }: Veh
       make:         vehicle?.make         ?? '',
       year:         vehicle?.year         ?? undefined,
     })
-  })
+  }, [vehicle, form])
 
   async function onSubmit(values: VehicleFormValues) {
     setLoading(true)

@@ -1,16 +1,11 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { uploadPermitDocument, setPermitDocumentUrl } from '@/lib/repositories/permits.repo'
+import { assertAdmin } from '@/lib/auth/assertAdmin'
+import { getErrorMessage } from '@/lib/errors'
 
 const ALLOWED_TYPES = ['application/pdf', 'image/png', 'image/jpeg']
-const MAX_BYTES = 10 * 1024 * 1024 // 10 MB
-
-async function assertAdmin(supabase: Awaited<ReturnType<typeof createClient>>) {
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return false
-  const { data } = await supabase.from('admins').select('user_id').eq('user_id', user.id).maybeSingle()
-  return data !== null
-}
+const MAX_BYTES = 10 * 1024 * 1024
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   const supabase = await createClient()
@@ -58,6 +53,6 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const updated = await setPermitDocumentUrl(supabase, permit.id, storagePath)
     return NextResponse.json({ success: true, data: updated })
   } catch (err) {
-    return NextResponse.json({ success: false, error: String(err) }, { status: 500 })
+    return NextResponse.json({ success: false, error: getErrorMessage(err) }, { status: 500 })
   }
 }

@@ -21,10 +21,10 @@ export type NewOrderFormValues = z.infer<typeof newOrderSchema>
 export const updateOrderSchema = z.object({
   status:      z.enum(['draft', 'active', 'completed', 'cancelled']).optional(),
   vehicle_id:  z.string().uuid().optional().nullable(),
-  origin:      z.string().optional().or(z.literal('')),
-  destination: z.string().optional().or(z.literal('')),
-  trip_date:   z.string().optional().or(z.literal('')),
-  notes:       z.string().optional().or(z.literal('')),
+  origin:      z.string().optional().or(z.literal('')).nullable(),
+  destination: z.string().optional().or(z.literal('')).nullable(),
+  trip_date:   z.string().optional().or(z.literal('')).nullable(),
+  notes:       z.string().optional().or(z.literal('')).nullable(),
 })
 
 export type UpdateOrderValues = z.infer<typeof updateOrderSchema>

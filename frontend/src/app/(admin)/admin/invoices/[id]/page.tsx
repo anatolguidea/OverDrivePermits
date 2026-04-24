@@ -6,21 +6,17 @@ import { createClient } from '@/lib/supabase/server'
 import { findInvoiceById } from '@/lib/repositories/invoices.repo'
 import { InvoiceDetail } from '@/components/admin/invoices/InvoiceDetail'
 
-interface InvoicePageProps {
-  params: Promise<{ id: string }>
-}
+type InvoicePageProps = { params: { id: string } }
 
 export async function generateMetadata({ params }: InvoicePageProps) {
-  const { id } = await params
   const supabase = await createClient()
-  const invoice = await findInvoiceById(supabase, id)
+  const invoice = await findInvoiceById(supabase, params.id)
   return { title: invoice ? `${invoice.invoice_number} — OSW Permits Admin` : 'Invoice Not Found' }
 }
 
 export default async function InvoicePage({ params }: InvoicePageProps) {
-  const { id } = await params
   const supabase = await createClient()
-  const invoice = await findInvoiceById(supabase, id)
+  const invoice = await findInvoiceById(supabase, params.id)
 
   if (!invoice) notFound()
 

@@ -7,6 +7,7 @@ import { Check, ChevronsUpDown } from 'lucide-react'
 import { newOrderSchema, type NewOrderFormValues } from '@/lib/validators/order.schema'
 import { useCustomerOptions, useVehiclesForCustomer } from '@/lib/queries/useCustomers'
 import { PermitRowsEditor, type PermitRow } from './PermitRowsEditor'
+import { US_STATES } from '@/lib/constants/us-states'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -41,13 +42,6 @@ import {
 import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
 
-const US_STATES = [
-  'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA',
-  'KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ',
-  'NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT',
-  'VA','WA','WV','WI','WY','DC',
-]
-
 export function NewOrderWizard() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -62,7 +56,7 @@ export function NewOrderWizard() {
     resolver: zodResolver(newOrderSchema),
     defaultValues: {
       customer_id: searchParams.get('customer_id') ?? '',
-      vehicle_id:  '',
+      vehicle_id:  '__none__',
       origin:      '',
       destination: '',
       trip_date:   '',
@@ -111,7 +105,7 @@ export function NewOrderWizard() {
       const payload = {
         order: {
           customer_id: values.customer_id,
-          vehicle_id:  values.vehicle_id || null,
+          vehicle_id:  (values.vehicle_id && values.vehicle_id !== '__none__') ? values.vehicle_id : null,
           status:      values.status,
           origin:      values.origin || null,
           destination: values.destination || null,
@@ -190,7 +184,7 @@ export function NewOrderWizard() {
                               value={c.name}
                               onSelect={() => {
                                 field.onChange(c.id)
-                                form.setValue('vehicle_id', '')
+                                form.setValue('vehicle_id', '__none__')
                                 setCustomerPopoverOpen(false)
                               }}
                             >
@@ -235,7 +229,7 @@ export function NewOrderWizard() {
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="">None</SelectItem>
+                      <SelectItem value="__none__">None</SelectItem>
                       {vehicles.map((v) => (
                         <SelectItem key={v.id} value={v.id}>
                           {v.unit_number}

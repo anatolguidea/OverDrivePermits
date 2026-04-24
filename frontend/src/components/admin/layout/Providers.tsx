@@ -21,7 +21,7 @@ export function Providers({ children }: { children: ReactNode }) {
     <QueryClientProvider client={queryClient}>
       {children}
       <Toaster />
-      <ReactQueryDevtools initialIsOpen={false} />
+      {process.env.NODE_ENV === 'development' && <ReactQueryDevtools initialIsOpen={false} />}
     </QueryClientProvider>
   )
 }

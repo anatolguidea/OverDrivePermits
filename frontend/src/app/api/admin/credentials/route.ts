@@ -2,13 +2,8 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { findCredentialsByCustomer, createCredential } from '@/lib/repositories/credentials.repo'
 import { credentialSchema } from '@/lib/validators/credential.schema'
-
-async function assertAdmin(supabase: Awaited<ReturnType<typeof createClient>>) {
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return false
-  const { data } = await supabase.from('admins').select('user_id').eq('user_id', user.id).maybeSingle()
-  return data !== null
-}
+import { assertAdmin } from '@/lib/auth/assertAdmin'
+import { getErrorMessage } from '@/lib/errors'
 
 export async function GET(request: NextRequest) {
   const supabase = await createClient()
@@ -25,7 +20,7 @@ export async function GET(request: NextRequest) {
     const data = await findCredentialsByCustomer(supabase, customer_id)
     return NextResponse.json({ success: true, data })
   } catch (err) {
-    return NextResponse.json({ success: false, error: String(err) }, { status: 500 })
+    return NextResponse.json({ success: false, error: getErrorMessage(err) }, { status: 500 })
   }
 }
 
@@ -50,6 +45,6 @@ export async function POST(request: NextRequest) {
     const data = await createCredential(supabase, { customer_id, ...parsed.data })
     return NextResponse.json({ success: true, data }, { status: 201 })
   } catch (err) {
-    return NextResponse.json({ success: false, error: String(err) }, { status: 500 })
+    return NextResponse.json({ success: false, error: getErrorMessage(err) }, { status: 500 })
   }
 }

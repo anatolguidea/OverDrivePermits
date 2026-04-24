@@ -1,8 +1,10 @@
 'use client'
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import type { OrderRow, OrderFilters, OrdersPage } from '@/lib/repositories/orders.repo'
+import { ordersQueryKey } from './orderKeys'
 
 export type { OrderRow, OrderFilters, OrdersPage }
+export { ordersQueryKey }
 
 async function fetchOrders(filters: OrderFilters): Promise<OrdersPage> {
   const params = new URLSearchParams()
@@ -17,10 +19,6 @@ async function fetchOrders(filters: OrderFilters): Promise<OrdersPage> {
   const res = await fetch(`/api/admin/orders?${params.toString()}`)
   if (!res.ok) throw new Error('Failed to fetch orders')
   return res.json()
-}
-
-export function ordersQueryKey(filters: OrderFilters) {
-  return ['orders', filters] as const
 }
 
 export function useOrders(filters: OrderFilters = {}) {

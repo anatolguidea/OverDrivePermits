@@ -9,8 +9,6 @@ export interface PermitRow {
   cost?: number
 }
 
-const STATE_COLORS: Record<string, string> = {}
-
 interface PermitRowsEditorProps {
   rows: PermitRow[]
   onChange: (rows: PermitRow[]) => void

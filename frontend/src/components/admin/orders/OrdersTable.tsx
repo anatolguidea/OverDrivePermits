@@ -9,6 +9,7 @@ import {
   Pencil,
   FileText,
   Receipt,
+  Plus,
 } from 'lucide-react'
 import {
   Table,
@@ -57,11 +58,28 @@ export function OrdersTable({ filters }: OrdersTableProps) {
   const page_size = filters.page_size ?? 25
   const totalPages = Math.ceil(total / page_size)
 
+  const hasActiveFilters = !!(filters.status && filters.status !== 'all') ||
+    !!filters.search || !!filters.date_from || !!filters.date_to
+
   if (!orders.length) {
     return (
       <EmptyState
         title="No orders found"
-        description="No orders match your current filters."
+        description={hasActiveFilters ? 'No orders match your current filters.' : 'No orders yet.'}
+        action={
+          <div className="flex gap-2">
+            {hasActiveFilters && (
+              <Button variant="outline" size="sm" asChild>
+                <Link href="/admin/orders">Clear filters</Link>
+              </Button>
+            )}
+            <Button size="sm" asChild>
+              <Link href="/admin/orders/new">
+                <Plus className="mr-1 h-3.5 w-3.5" /> New Order
+              </Link>
+            </Button>
+          </div>
+        }
       />
     )
   }
@@ -172,7 +190,7 @@ export function OrdersTable({ filters }: OrdersTableProps) {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-7 w-7 opacity-0 group-hover:opacity-100"
+                          className="h-7 w-7 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
                         >
                           <MoreHorizontal className="h-4 w-4" />
                           <span className="sr-only">Actions</span>

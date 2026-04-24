@@ -28,9 +28,11 @@ export interface OrderOption {
 interface InvoiceFormProps {
   customers: CustomerOption[]
   orders?: OrderOption[]
+  initialCustomerId?: string
+  initialOrderId?: string
 }
 
-export function InvoiceForm({ customers, orders = [] }: InvoiceFormProps) {
+export function InvoiceForm({ customers, orders = [], initialCustomerId, initialOrderId }: InvoiceFormProps) {
   const router = useRouter()
   const { toast } = useToast()
   const [submitting, setSubmitting] = useState(false)
@@ -50,6 +52,8 @@ export function InvoiceForm({ customers, orders = [] }: InvoiceFormProps) {
       status: 'draft',
       issue_date: today,
       tax: 0,
+      customer_id: initialCustomerId,
+      order_id: initialOrderId ?? null,
       line_items: [{ description: '', quantity: 1, unit_price: 0, position: 0 }],
     },
   })
@@ -98,6 +102,7 @@ export function InvoiceForm({ customers, orders = [] }: InvoiceFormProps) {
         <div className="space-y-1.5">
           <Label htmlFor="customer_id">Customer *</Label>
           <Select
+            value={watchedCustomerId ?? ''}
             onValueChange={(val) => {
               setValue('customer_id', val, { shouldValidate: true })
               setValue('order_id', null)
@@ -122,6 +127,7 @@ export function InvoiceForm({ customers, orders = [] }: InvoiceFormProps) {
         <div className="space-y-1.5">
           <Label htmlFor="order_id">Order (optional)</Label>
           <Select
+            value={watch('order_id') ?? 'none'}
             onValueChange={(val) => setValue('order_id', val === 'none' ? null : val)}
             disabled={filteredOrders.length === 0}
           >

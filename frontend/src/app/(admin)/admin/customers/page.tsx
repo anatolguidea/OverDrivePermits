@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Plus, Search } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { findCustomers } from '@/lib/repositories/customers.repo'
 import { Button } from '@/components/ui/button'
@@ -12,6 +12,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { EmptyState } from '@/components/admin/shared/EmptyState'
+import { CustomersSearchBar } from '@/components/admin/customers/CustomersSearchBar'
 
 export const metadata = { title: 'Customers — OSW Permits Admin' }
 
@@ -40,16 +41,7 @@ export default async function CustomersPage({
         </Button>
       </div>
 
-      {/* Search */}
-      <form method="GET" className="relative w-64">
-        <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-        <input
-          name="search"
-          defaultValue={searchParams.search ?? ''}
-          placeholder="Name, USDOT, MC…"
-          className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 pl-8 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
-        />
-      </form>
+      <CustomersSearchBar defaultValue={searchParams.search ?? ''} />
 
       {customers.length === 0 ? (
         <EmptyState

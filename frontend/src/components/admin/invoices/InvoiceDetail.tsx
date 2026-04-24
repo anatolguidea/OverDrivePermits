@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { StatusBadge } from '@/components/admin/shared/StatusBadge'
+import { ConfirmDialog } from '@/components/admin/shared/ConfirmDialog'
 import { useToast } from '@/hooks/use-toast'
 import type { InvoiceDetail as InvoiceDetailType } from '@/lib/repositories/invoices.repo'
 
@@ -16,6 +17,7 @@ export function InvoiceDetail({ invoice: initialInvoice }: InvoiceDetailProps) {
   const { toast } = useToast()
   const [invoice, setInvoice] = useState(initialInvoice)
   const [loading, setLoading] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
 
   async function transitionStatus(status: 'sent' | 'paid') {
     setLoading(true)
@@ -42,7 +44,6 @@ export function InvoiceDetail({ invoice: initialInvoice }: InvoiceDetailProps) {
   }
 
   async function handleDelete() {
-    if (!confirm('Delete this invoice? This cannot be undone.')) return
     setLoading(true)
     try {
       const res = await fetch(`/api/admin/invoices/${invoice.id}`, { method: 'DELETE' })
@@ -108,7 +109,7 @@ export function InvoiceDetail({ invoice: initialInvoice }: InvoiceDetailProps) {
             size="sm"
             variant="destructive"
             disabled={loading}
-            onClick={handleDelete}
+            onClick={() => setDeleteOpen(true)}
           >
             Delete
           </Button>
@@ -186,6 +187,17 @@ export function InvoiceDetail({ invoice: initialInvoice }: InvoiceDetailProps) {
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="Delete invoice"
+        description={`Delete invoice ${invoice.invoice_number}? This cannot be undone.`}
+        confirmLabel="Delete"
+        destructive
+        loading={loading}
+        onConfirm={handleDelete}
+      />
 
       {/* Notes */}
       {invoice.notes && (

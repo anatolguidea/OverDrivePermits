@@ -1,6 +1,6 @@
 'use client'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
-import { useCallback } from 'react'
+import { useCallback, useState, useEffect } from 'react'
 import { Search, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import {
@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
+import { useDebounce } from '@/lib/hooks/useDebounce'
 import type { OrderStatus } from '@/lib/supabase/types'
 
 const ORDER_STATUSES: { value: OrderStatus | 'all'; label: string }[] = [
@@ -27,9 +28,12 @@ export function OrderFilters() {
   const searchParams = useSearchParams()
 
   const status    = searchParams.get('status') ?? 'all'
-  const search    = searchParams.get('search') ?? ''
+  const urlSearch = searchParams.get('search') ?? ''
   const date_from = searchParams.get('date_from') ?? ''
   const date_to   = searchParams.get('date_to') ?? ''
+
+  const [searchInput, setSearchInput] = useState(urlSearch)
+  const debouncedSearch = useDebounce(searchInput, 350)
 
   const push = useCallback(
     (updates: Record<string, string | null>) => {
@@ -47,7 +51,19 @@ export function OrderFilters() {
     [router, pathname, searchParams]
   )
 
-  const hasFilters = status !== 'all' || search || date_from || date_to
+  useEffect(() => {
+    if (debouncedSearch !== urlSearch) {
+      push({ search: debouncedSearch })
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch])
+
+  function handleClear() {
+    setSearchInput('')
+    push({ status: null, search: null, date_from: null, date_to: null })
+  }
+
+  const hasFilters = status !== 'all' || urlSearch || date_from || date_to
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -57,9 +73,18 @@ export function OrderFilters() {
         <Input
           placeholder="Order # or customer…"
           className="h-8 pl-8 text-sm"
-          value={search}
-          onChange={(e) => push({ search: e.target.value })}
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
         />
+        {searchInput && (
+          <button
+            type="button"
+            onClick={() => { setSearchInput(''); push({ search: null }) }}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        )}
       </div>
 
       {/* Status */}
@@ -82,14 +107,12 @@ export function OrderFilters() {
         className="h-8 w-36 text-sm"
         value={date_from}
         onChange={(e) => push({ date_from: e.target.value })}
-        placeholder="From"
       />
       <Input
         type="date"
         className="h-8 w-36 text-sm"
         value={date_to}
         onChange={(e) => push({ date_to: e.target.value })}
-        placeholder="To"
       />
 
       {/* Clear */}
@@ -98,7 +121,7 @@ export function OrderFilters() {
           variant="ghost"
           size="sm"
           className="h-8 gap-1 text-xs"
-          onClick={() => push({ status: null, search: null, date_from: null, date_to: null })}
+          onClick={handleClear}
         >
           <X className="h-3 w-3" />
           Clear
