@@ -15,6 +15,7 @@ import { EmptyState } from '@/components/admin/shared/EmptyState'
 import { CustomersSearchBar } from '@/components/admin/customers/CustomersSearchBar'
 
 export const metadata = { title: 'Customers — OSW Permits Admin' }
+export const dynamic = 'force-dynamic'
 
 export default async function CustomersPage({
   searchParams,
@@ -28,11 +29,12 @@ export default async function CustomersPage({
   })
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="space-y-5">
+      <div className="admin-page-header">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Customers</h2>
-          <p className="text-sm text-muted-foreground">{total} total</p>
+          <p className="admin-section-label">Customers</p>
+          <h1 className="admin-page-title">Carrier directory</h1>
+          <p className="admin-page-meta">{total} carriers on file with fleet, credentials, and order history.</p>
         </div>
         <Button asChild size="sm">
           <Link href="/admin/customers/new">
@@ -54,38 +56,38 @@ export default async function CustomersPage({
           }
         />
       ) : (
-        <div className="rounded-md border border-border">
+        <div className="admin-table-wrap">
           <Table>
             <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead>Company</TableHead>
-                <TableHead className="w-28">USDOT</TableHead>
-                <TableHead className="w-28">MC #</TableHead>
-                <TableHead>Contact</TableHead>
-                <TableHead className="w-24">Location</TableHead>
-                <TableHead className="w-20 text-right">Orders</TableHead>
+              <TableRow className="bg-slate-50 hover:bg-slate-50">
+                <TableHead className="text-[11px] uppercase tracking-[0.14em] text-slate-500">Company</TableHead>
+                <TableHead className="w-28 text-[11px] uppercase tracking-[0.14em] text-slate-500">USDOT</TableHead>
+                <TableHead className="w-28 text-[11px] uppercase tracking-[0.14em] text-slate-500">MC #</TableHead>
+                <TableHead className="text-[11px] uppercase tracking-[0.14em] text-slate-500">Contact</TableHead>
+                <TableHead className="w-24 text-[11px] uppercase tracking-[0.14em] text-slate-500">Location</TableHead>
+                <TableHead className="w-20 text-right text-[11px] uppercase tracking-[0.14em] text-slate-500">Orders</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {customers.map((c) => (
-                <TableRow key={c.id}>
+                <TableRow key={c.id} className="hover:bg-slate-50/70">
                   <TableCell>
                     <Link
                       href={`/admin/customers/${c.id}`}
-                      className="font-medium hover:underline"
+                      className="font-medium text-slate-950 hover:underline"
                     >
                       {c.name}
                     </Link>
                   </TableCell>
-                  <TableCell className="font-mono text-sm">{c.usdot ?? '—'}</TableCell>
-                  <TableCell className="font-mono text-sm">{c.mc_number ?? '—'}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
+                  <TableCell className="admin-mono text-xs">{c.usdot ?? '—'}</TableCell>
+                  <TableCell className="admin-mono text-xs">{c.mc_number ?? '—'}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
                     {c.email ?? c.phone ?? '—'}
                   </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
+                  <TableCell className="text-xs text-muted-foreground">
                     {[c.city, c.state_code].filter(Boolean).join(', ') || '—'}
                   </TableCell>
-                  <TableCell className="text-right font-medium">{c._order_count}</TableCell>
+                  <TableCell className="text-right admin-mono font-medium">{c._order_count}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

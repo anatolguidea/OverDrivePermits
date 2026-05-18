@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { csrfFetch } from '@/lib/http/client'
 import { useRouter } from 'next/navigation'
 import {
   DropdownMenu,
@@ -39,7 +40,7 @@ export function OrderStatusControl({ orderId, currentStatus }: OrderStatusContro
   async function transition(to: OrderStatus) {
     setLoading(true)
     try {
-      const res = await fetch(`/api/admin/orders/${orderId}`, {
+      const res = await csrfFetch(`/api/admin/orders/${orderId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: to }),

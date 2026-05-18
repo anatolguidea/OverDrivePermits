@@ -13,7 +13,7 @@ export const newInvoiceSchema = z.object({
   customer_id: z.string().uuid('Select a customer'),
   order_id: z.string().uuid().optional().nullable(),
   tax: z.number({ error: 'Tax must be a number' }).min(0, 'Tax must be 0 or greater').default(0),
-  status: z.enum(['draft', 'sent', 'paid']).default('draft'),
+  status: z.enum(['draft', 'sent', 'overdue', 'paid', 'void']).default('draft'),
   issue_date: z.string().default(() => new Date().toISOString().split('T')[0]),
   due_date: z.string().optional().or(z.literal('')),
   notes: z.string().optional().or(z.literal('')),
@@ -23,7 +23,7 @@ export const newInvoiceSchema = z.object({
 export type NewInvoiceValues = z.infer<typeof newInvoiceSchema>
 
 export const updateInvoiceSchema = z.object({
-  status: z.enum(['draft', 'sent', 'paid']).optional(),
+  status: z.enum(['draft', 'sent', 'overdue', 'paid', 'void']).optional(),
   tax: z.number().min(0).optional(),
   due_date: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),

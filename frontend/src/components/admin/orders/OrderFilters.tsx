@@ -1,6 +1,6 @@
 'use client'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
-import { useCallback, useState, useEffect } from 'react'
+import { useCallback, useState, useEffect, useRef } from 'react'
 import { Search, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import {
@@ -26,6 +26,7 @@ export function OrderFilters() {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
+  const searchRef = useRef<HTMLInputElement>(null)
 
   const status    = searchParams.get('status') ?? 'all'
   const urlSearch = searchParams.get('search') ?? ''
@@ -33,6 +34,12 @@ export function OrderFilters() {
   const date_to   = searchParams.get('date_to') ?? ''
 
   const [searchInput, setSearchInput] = useState(urlSearch)
+
+  useEffect(() => {
+    function onFocusSearch() { searchRef.current?.focus() }
+    window.addEventListener('focus-orders-search', onFocusSearch)
+    return () => window.removeEventListener('focus-orders-search', onFocusSearch)
+  }, [])
   const debouncedSearch = useDebounce(searchInput, 350)
 
   const push = useCallback(
@@ -66,12 +73,13 @@ export function OrderFilters() {
   const hasFilters = status !== 'all' || urlSearch || date_from || date_to
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="admin-toolbar">
       {/* Search */}
       <div className="relative w-52">
         <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
         <Input
-          placeholder="Order # or customer…"
+          ref={searchRef}
+          placeholder="Order # or customer… (/)"
           className="h-8 pl-8 text-sm"
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
@@ -120,7 +128,7 @@ export function OrderFilters() {
         <Button
           variant="ghost"
           size="sm"
-          className="h-8 gap-1 text-xs"
+          className="ml-auto h-8 gap-1 text-xs"
           onClick={handleClear}
         >
           <X className="h-3 w-3" />

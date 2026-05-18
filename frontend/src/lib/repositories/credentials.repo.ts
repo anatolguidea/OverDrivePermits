@@ -2,6 +2,7 @@ import 'server-only'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/types'
 import { encryptPassword, decryptPassword } from '@/lib/crypto/credentials'
+import { notFound } from '@/lib/errors'
 
 export type CredentialRow = Database['public']['Tables']['customer_credentials']['Row']
 type CredentialUpdatePayload = Database['public']['Tables']['customer_credentials']['Update']
@@ -9,8 +10,9 @@ type CredentialUpdatePayload = Database['public']['Tables']['customer_credential
 export interface CredentialDisplay {
   id: string
   customer_id: string
-  state_code: string
+  jurisdiction: string
   username: string
+  password_last_rotated_at: string | null
   notes: string | null
   created_at: string
   updated_at: string
@@ -23,9 +25,9 @@ export async function findCredentialsByCustomer(
 ): Promise<CredentialDisplay[]> {
   const { data, error } = await supabase
     .from('customer_credentials')
-    .select('id, customer_id, state_code, username, notes, created_at, updated_at')
+    .select('id, customer_id, jurisdiction, username, password_last_rotated_at, notes, created_at, updated_at')
     .eq('customer_id', customer_id)
-    .order('state_code')
+    .order('jurisdiction')
 
   if (error) throw new Error(`credentials.findByCustomer: ${error.message}`)
   return data ?? []
@@ -49,24 +51,49 @@ export async function decryptCredential(
   })
 }
 
+export async function findCredentialById(
+  supabase: SupabaseClient<Database>,
+  id: string
+): Promise<CredentialDisplay | null> {
+  const { data, error } = await supabase
+    .from('customer_credentials')
+    .select('id, customer_id, jurisdiction, username, password_last_rotated_at, notes, created_at, updated_at')
+    .eq('id', id)
+    .maybeSingle()
+
+  if (error) throw new Error(`credentials.findById: ${error.message}`)
+  return data
+}
+
+export async function ensureCredentialExists(
+  supabase: SupabaseClient<Database>,
+  id: string
+): Promise<CredentialDisplay> {
+  const credential = await findCredentialById(supabase, id)
+  if (!credential) throw notFound('Credential not found')
+  return credential
+}
+
 export async function createCredential(
   supabase: SupabaseClient<Database>,
-  values: { customer_id: string; state_code: string; username: string; password: string; notes?: string | null }
+  values: { customer_id: string; jurisdiction: string; username: string; password: string; notes?: string | null }
 ): Promise<CredentialDisplay> {
   const encrypted = encryptPassword(values.password)
 
   const { data, error } = await supabase
     .from('customer_credentials')
     .insert({
-      customer_id:         values.customer_id,
-      state_code:          values.state_code,
-      username:            values.username,
-      password_ciphertext: encrypted.ciphertext,
-      password_iv:         encrypted.iv,
-      password_tag:        encrypted.tag,
-      notes:               values.notes ?? null,
+      customer_id:              values.customer_id,
+      jurisdiction:             values.jurisdiction,
+      state_code:               null,
+      username:                 values.username,
+      password_ciphertext:      encrypted.ciphertext,
+      password_iv:              encrypted.iv,
+      password_tag:             encrypted.tag,
+      password_last_rotated_at: null,
+      notes:                    values.notes ?? null,
     })
-    .select('id, customer_id, state_code, username, notes, created_at, updated_at')
+    .select('id, customer_id, jurisdiction, username, password_last_rotated_at, notes, created_at, updated_at')
     .single()
 
   if (error) throw new Error(`credentials.create: ${error.message}`)
@@ -82,9 +109,10 @@ export async function updateCredential(
   if (values.username !== undefined) patch.username = values.username
   if (values.password !== undefined) {
     const encrypted = encryptPassword(values.password)
-    patch.password_ciphertext = encrypted.ciphertext
-    patch.password_iv         = encrypted.iv
-    patch.password_tag        = encrypted.tag
+    patch.password_ciphertext        = encrypted.ciphertext
+    patch.password_iv                = encrypted.iv
+    patch.password_tag               = encrypted.tag
+    patch.password_last_rotated_at   = new Date().toISOString()
   }
   if (values.notes !== undefined) patch.notes = values.notes
 
@@ -92,7 +120,7 @@ export async function updateCredential(
     .from('customer_credentials')
     .update(patch as CredentialUpdatePayload)
     .eq('id', id)
-    .select('id, customer_id, state_code, username, notes, created_at, updated_at')
+    .select('id, customer_id, jurisdiction, username, password_last_rotated_at, notes, created_at, updated_at')
     .single()
 
   if (error) throw new Error(`credentials.update: ${error.message}`)

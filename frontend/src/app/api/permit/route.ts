@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
 import { PermitRequest } from '@/types/permit.types';
 import { formatPhoneNumber } from '@/utils/formatPhone';
+import { logger } from '@/lib/observability/logger';
 
 // Helper function to escape HTML to prevent XSS
 const escapeHtml = (text: string): string => {
@@ -73,9 +74,7 @@ const verifyTransporter = async (transporter: nodemailer.Transporter): Promise<v
   try {
     await transporter.verify();
   } catch (error: any) {
-    // Log warning but don't throw - we'll try to send anyway
-    console.warn('SMTP connection verification failed (will attempt to send anyway):', error.message);
-    // Don't throw - let the actual send attempt determine if there's a real problem
+    logger.warn('smtp verification failed', { error: error.message });
   }
 };
 
@@ -720,7 +719,9 @@ export async function POST(request: NextRequest) {
       // Try to verify SMTP connection (non-blocking)
       await verifyTransporter(transporter);
     } catch (configError: any) {
-      console.error('SMTP configuration error:', configError);
+      logger.error('smtp configuration error', {
+        error: configError?.message ?? 'unknown',
+      });
       return NextResponse.json(
         {
           success: false,
@@ -745,9 +746,11 @@ export async function POST(request: NextRequest) {
     
     // Log the from address being used (for debugging)
     if (process.env.NODE_ENV === 'development') {
-      console.log('Email from address:', fromAddress);
-      console.log('SMTP_FROM env var:', process.env.SMTP_FROM);
-      console.log('SMTP_USER env var:', process.env.SMTP_USER);
+      logger.info('permit email sender resolved', {
+        fromAddress,
+        smtp_from: process.env.SMTP_FROM ?? null,
+        smtp_user: process.env.SMTP_USER ?? null,
+      });
     }
 
     // Send admin notification email
@@ -762,7 +765,10 @@ export async function POST(request: NextRequest) {
       html: generateAdminEmailTemplate(data),
     });
     } catch (adminEmailError: any) {
-      console.error('Failed to send admin notification email:', adminEmailError);
+      logger.error('admin notification email failed', {
+        error: adminEmailError?.message ?? 'unknown',
+        code: adminEmailError?.code ?? 'UNKNOWN',
+      });
       const errorMessage = adminEmailError.message || 'Unknown error';
       const errorCode = adminEmailError.code || 'UNKNOWN';
       
@@ -799,7 +805,10 @@ export async function POST(request: NextRequest) {
     } catch (userEmailError: any) {
       // Log error but don't fail the request if user email fails
       // Admin email was sent successfully, so we consider the request processed
-      console.error('Failed to send user confirmation email:', userEmailError);
+      logger.warn('user confirmation email failed', {
+        error: userEmailError?.message ?? 'unknown',
+        code: userEmailError?.code ?? 'UNKNOWN',
+      });
       // Still return success since admin was notified
     }
 
@@ -808,8 +817,10 @@ export async function POST(request: NextRequest) {
       message: 'Permit request submitted successfully',
     });
   } catch (error: any) {
-    console.error('Error submitting permit request:', error);
-    console.error('Error stack:', error.stack);
+    logger.error('permit submission failed', {
+      error: error?.message ?? 'unknown',
+      stack: error?.stack ?? null,
+    });
     
     // Provide more detailed error information
     let errorMessage = 'Failed to submit permit request. ';
@@ -833,4 +844,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

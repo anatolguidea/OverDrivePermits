@@ -1,139 +1,81 @@
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/server'
-import { findOrders } from '@/lib/repositories/orders.repo'
-import { HydrationBoundary, QueryClient, dehydrate } from '@tanstack/react-query'
-import { ordersQueryKey } from '@/lib/queries/orderKeys'
-import { OrdersTableWithFilters } from '@/components/admin/orders/OrdersTableWithFilters'
-import { FileText, Users, DollarSign, Clock, Send, AlertCircle } from 'lucide-react'
+import { ArrowRight, Keyboard, Plus } from 'lucide-react'
+import { OrdersTable } from '@/components/admin/orders/OrdersTable'
+import { Button } from '@/components/ui/button'
+import { DashboardPermitLegend } from '@/components/admin/dashboard/DashboardPermitLegend'
+import { DashboardMetrics } from '@/components/admin/dashboard/DashboardMetrics'
 
 export const metadata = { title: 'Dashboard — OSW Permits Admin' }
+export const dynamic = 'force-dynamic'
 
-export default async function DashboardPage() {
-  const supabase = await createClient()
-  const queryClient = new QueryClient()
-
-  const [
-    activeOrdersRes,
-    totalCustomersRes,
-    paidRevenueRes,
-    pendingPermitsRes,
-    submittedPermitsRes,
-    outstandingRes,
-  ] = await Promise.all([
-    supabase.from('orders').select('*', { count: 'exact', head: true }).eq('status', 'active'),
-    supabase.from('customers').select('*', { count: 'exact', head: true }),
-    supabase.from('invoices').select('total_amount').eq('status', 'paid'),
-    supabase.from('permits').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
-    supabase.from('permits').select('*', { count: 'exact', head: true }).eq('status', 'submitted'),
-    supabase.from('invoices').select('total_amount').in('status', ['draft', 'sent']),
-    queryClient.prefetchQuery({
-      queryKey: ordersQueryKey({ status: 'all', page: 1, page_size: 25 }),
-      queryFn: () => findOrders(supabase, { status: 'all', page: 1, page_size: 25 }),
-    }),
-  ])
-
-  const activeOrders   = activeOrdersRes.count ?? 0
-  const totalCustomers = totalCustomersRes.count ?? 0
-  const paidRevenue    = (paidRevenueRes.data ?? []).reduce((s, i) => s + (i.total_amount ?? 0), 0)
-  const pendingPermits = pendingPermitsRes.count ?? 0
-  const submittedPermits = submittedPermitsRes.count ?? 0
-  const outstanding    = (outstandingRes.data ?? []).reduce((s, i) => s + (i.total_amount ?? 0), 0)
-
-  const fmt = (n: number) =>
-    `$${n.toLocaleString('en-US', { minimumFractionDigits: 2 })}`
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: { page?: string }
+}) {
+  const page = searchParams.page ? Number(searchParams.page) : 1
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight">Dashboard</h2>
-        <p className="text-sm text-muted-foreground">Overview of your permit operations</p>
+    <div className="space-y-5">
+      <section className="admin-page-header">
+        <div>
+          <p className="admin-section-label">Dashboard</p>
+          <h1 className="admin-page-title">Active order board</h1>
+          <p className="admin-page-meta">
+            Operator-first queue for permit work in motion. Shortcuts: <span className="admin-mono">N</span> new order,
+            <span className="admin-mono"> / </span> search, <span className="admin-mono">⌘K</span> jump palette.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button asChild size="sm">
+            <Link href="/admin/orders/new">
+              <Plus className="mr-1.5 h-4 w-4" />
+              New Order
+            </Link>
+          </Button>
+          <Button asChild size="sm" variant="outline">
+            <Link href="/admin/orders">
+              Full orders queue
+              <ArrowRight className="ml-1.5 h-4 w-4" />
+            </Link>
+          </Button>
+        </div>
+      </section>
+
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <DashboardMetrics />
+
+        <div className="admin-panel p-4">
+          <div className="flex items-start gap-3">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-2 text-slate-700">
+              <Keyboard className="h-4 w-4" />
+            </div>
+            <div>
+              <p className="admin-section-label">Operator Rhythm</p>
+              <p className="mt-1 text-sm font-medium text-slate-950">Keep the queue keyboard-led.</p>
+              <p className="mt-1 text-xs leading-5 text-slate-500">
+                Use the dashboard for triage, the permit drawer for fast status updates, and the full order page only when details change.
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <StatCard
-          label="Active Orders"
-          value={activeOrders}
-          icon={FileText}
-          href="/admin/orders?status=active"
-        />
-        <StatCard
-          label="Total Customers"
-          value={totalCustomers}
-          icon={Users}
-          href="/admin/customers"
-        />
-        <StatCard
-          label="Revenue (Paid)"
-          value={fmt(paidRevenue)}
-          icon={DollarSign}
-          href="/admin/invoices?status=paid"
-          mono
-        />
-        <StatCard
-          label="Permits Pending"
-          value={pendingPermits}
-          icon={Clock}
-          variant={pendingPermits > 0 ? 'warning' : 'default'}
-        />
-        <StatCard
-          label="Permits Submitted"
-          value={submittedPermits}
-          icon={Send}
-          variant={submittedPermits > 0 ? 'info' : 'default'}
-        />
-        <StatCard
-          label="Outstanding Invoices"
-          value={fmt(outstanding)}
-          icon={AlertCircle}
-          href="/admin/invoices"
-          variant={outstanding > 0 ? 'warning' : 'default'}
-          mono
-        />
-      </div>
+      <DashboardPermitLegend />
 
-      <HydrationBoundary state={dehydrate(queryClient)}>
-        <OrdersTableWithFilters />
-      </HydrationBoundary>
+      <section className="admin-panel">
+        <div className="admin-page-header px-4 pb-3 pt-4 sm:px-5">
+          <div>
+            <p className="admin-section-label">Primary Queue</p>
+            <h2 className="text-lg font-semibold tracking-tight text-slate-950">Active orders</h2>
+            <p className="admin-page-meta">Newest active work, route order preserved in the permit strip.</p>
+          </div>
+        </div>
+
+        <div className="px-4 pb-4 sm:px-5">
+          <OrdersTable filters={{ status: 'active', page, page_size: 25 }} />
+        </div>
+      </section>
     </div>
   )
-}
-
-type Variant = 'default' | 'warning' | 'info'
-
-function StatCard({
-  label,
-  value,
-  icon: Icon,
-  href,
-  variant = 'default',
-  mono = false,
-}: {
-  label: string
-  value: string | number
-  icon: React.ElementType
-  href?: string
-  variant?: Variant
-  mono?: boolean
-}) {
-  const iconColors: Record<Variant, string> = {
-    default: 'text-primary',
-    warning: 'text-amber-500',
-    info: 'text-sky-500',
-  }
-
-  const card = (
-    <div className={`rounded-lg border border-border bg-card p-5 transition-colors ${href ? 'hover:bg-muted/40 cursor-pointer' : ''}`}>
-      <div className="flex items-start justify-between">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-        <Icon className={`h-4 w-4 ${iconColors[variant]}`} />
-      </div>
-      <p className={`mt-3 text-2xl font-bold ${mono ? 'font-mono' : ''}`}>{value}</p>
-    </div>
-  )
-
-  if (href) {
-    return <Link href={href} className="block">{card}</Link>
-  }
-
-  return card
 }

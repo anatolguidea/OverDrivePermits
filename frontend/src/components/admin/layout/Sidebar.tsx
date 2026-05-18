@@ -1,14 +1,13 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useState } from 'react'
 import {
   LayoutDashboard,
   FileText,
   Users,
   Receipt,
-  BarChart3,
   Truck,
+  Settings,
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react'
@@ -19,7 +18,7 @@ const nav = [
   { label: 'Orders',    href: '/admin/orders',    icon: FileText },
   { label: 'Customers', href: '/admin/customers', icon: Users },
   { label: 'Invoices',  href: '/admin/invoices',  icon: Receipt },
-  { label: 'Reports',   href: '/admin/reports',   icon: BarChart3 },
+  { label: 'Settings',  href: '/admin/settings',  icon: Settings },
 ]
 
 interface SidebarProps {
@@ -33,71 +32,101 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
   return (
     <aside
       className={cn(
-        'hidden lg:flex flex-col border-r border-border bg-card transition-all duration-200',
-        collapsed ? 'w-16' : 'w-60'
+        'hidden border-r border-slate-200/80 lg:flex lg:flex-col',
+        collapsed ? 'lg:w-[5.5rem]' : 'lg:w-[15.5rem]'
       )}
     >
-      {/* Logo */}
-      <div className={cn(
-        'flex h-14 items-center border-b border-border',
-        collapsed ? 'justify-center px-2' : 'gap-2 px-5'
-      )}>
-        <Truck className="h-5 w-5 shrink-0 text-primary" />
-        {!collapsed && (
-          <span className="text-sm font-bold tracking-tight">OSW Permits</span>
+      <div
+        className={cn(
+          'flex h-full flex-col overflow-hidden bg-[rgba(248,250,252,0.88)]',
+          collapsed ? 'px-2 py-4' : 'px-3 py-4'
         )}
-      </div>
-
-      {/* Nav */}
-      <nav className="flex-1 overflow-y-auto px-2 py-3">
-        <ul className="space-y-1">
-          {nav.map(({ label, href, icon: Icon }) => {
-            const active =
-              href === '/admin/dashboard'
-                ? pathname === href
-                : pathname.startsWith(href)
-
-            return (
-              <li key={href}>
-                <Link
-                  href={href}
-                  title={collapsed ? label : undefined}
-                  className={cn(
-                    'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                    collapsed && 'justify-center px-2',
-                    active
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
-                  )}
-                >
-                  <Icon className="h-4 w-4 shrink-0" />
-                  {!collapsed && label}
-                </Link>
-              </li>
-            )
-          })}
-        </ul>
-      </nav>
-
-      {/* Collapse toggle */}
-      <div className="border-t border-border p-2">
-        <button
-          onClick={onToggle}
+      >
+        <div
           className={cn(
-            'flex w-full items-center gap-2 rounded-md px-3 py-2 text-xs text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors',
-            collapsed && 'justify-center px-2'
+            'flex items-center rounded-lg border border-slate-200 bg-white px-3 py-3',
+            collapsed ? 'justify-center' : 'gap-3'
           )}
-          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
-          {collapsed ? (
-            <ChevronRight className="h-4 w-4" />
-          ) : (
-            <>
-              <ChevronLeft className="h-4 w-4" />
-              <span>Collapse</span>
-            </>
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-950 text-white">
+            <Truck className="h-5 w-5 shrink-0" />
+          </div>
+          {!collapsed && (
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                Admin Desk
+              </p>
+              <p className="truncate text-sm font-semibold tracking-tight text-slate-950">
+                OSW Permits
+              </p>
+            </div>
           )}
-        </button>
+        </div>
+
+        {!collapsed && (
+          <div className="mt-4 rounded-lg border border-slate-200 bg-white px-4 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+              Workspace
+            </p>
+            <p className="mt-2 text-sm font-semibold text-slate-950">
+              Dense operator layout
+            </p>
+            <p className="mt-1 text-xs leading-5 text-slate-500">
+              Orders, customers, invoices, and settings only. No extra dashboard chrome.
+            </p>
+          </div>
+        )}
+
+        <nav className="mt-5 flex-1 overflow-y-auto">
+          <ul className="space-y-1">
+            {nav.map(({ label, href, icon: Icon }) => {
+              const active =
+                href === '/admin/dashboard'
+                  ? pathname === href
+                  : pathname.startsWith(href)
+
+              return (
+                <li key={href}>
+                  <Link
+                    href={href}
+                    title={collapsed ? label : undefined}
+                    data-active={active}
+                    className={cn(
+                      'admin-nav-link',
+                      collapsed && 'justify-center px-2.5',
+                      active
+                        ? 'border-slate-300 bg-white text-slate-950'
+                        : 'text-slate-600 hover:border-slate-200 hover:bg-white hover:text-slate-950'
+                    )}
+                  >
+                    <Icon className={cn('relative z-[1] h-4 w-4 shrink-0', active ? 'text-slate-950' : 'text-slate-500')} />
+                    {!collapsed && <span className="relative z-[1]">{label}</span>}
+                  </Link>
+                </li>
+              )
+            })}
+          </ul>
+        </nav>
+
+        <div className="mt-4 border-t border-slate-900/10 pt-4">
+          <button
+            onClick={onToggle}
+            className={cn(
+              'flex w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs font-medium text-slate-600 transition hover:text-slate-950',
+              collapsed && 'justify-center px-2'
+            )}
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            {collapsed ? (
+              <ChevronRight className="h-4 w-4" />
+            ) : (
+              <>
+                <ChevronLeft className="h-4 w-4" />
+                <span>Collapse rail</span>
+              </>
+            )}
+          </button>
+        </div>
       </div>
     </aside>
   )

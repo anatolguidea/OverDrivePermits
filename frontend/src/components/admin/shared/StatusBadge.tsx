@@ -5,23 +5,28 @@ type AnyStatus = OrderStatus | PermitStatus | InvoiceStatus
 
 const styles: Record<string, string> = {
   // Order
-  draft:      'bg-slate-100 text-slate-600',
-  active:     'bg-blue-100 text-blue-700',
-  completed:  'bg-green-100 text-green-700',
-  cancelled:  'bg-red-100 text-red-600',
+  draft:      'border border-slate-200 bg-slate-100 text-slate-700',
+  active:     'border border-blue-200 bg-blue-50 text-blue-700',
+  completed:  'border border-emerald-200 bg-emerald-50 text-emerald-700',
+  cancelled:  'border border-rose-200 bg-rose-50 text-rose-700',
   // Permit
-  pending:    'bg-slate-100 text-slate-500',
-  submitted:  'bg-yellow-100 text-yellow-700',
-  issued:     'bg-green-100 text-green-700',
+  pending:    'border border-slate-200 bg-slate-100 text-slate-600',
+  in_progress:'border border-amber-200 bg-amber-50 text-amber-700',
+  submitted:  'border border-blue-200 bg-blue-50 text-blue-700',
+  issued:     'border border-emerald-200 bg-emerald-50 text-emerald-700',
+  rejected:   'border border-rose-200 bg-rose-50 text-rose-700',
+  not_needed: 'border border-slate-200 bg-slate-50 text-slate-500 line-through',
   // Invoice
-  sent:       'bg-blue-100 text-blue-700',
-  paid:       'bg-emerald-100 text-emerald-700',
+  sent:       'border border-blue-200 bg-blue-50 text-blue-700',
+  overdue:    'border border-amber-200 bg-amber-50 text-amber-700',
+  paid:       'border border-emerald-200 bg-emerald-50 text-emerald-700',
+  void:       'border border-rose-200 bg-rose-50 text-rose-700',
 }
 
 const labels: Record<string, string> = {
   draft: 'Draft', active: 'Active', completed: 'Completed', cancelled: 'Cancelled',
-  pending: 'Pending', submitted: 'Submitted', issued: 'Issued',
-  sent: 'Sent', paid: 'Paid',
+  pending: 'Pending', in_progress: 'In Progress', submitted: 'Submitted', issued: 'Issued', rejected: 'Rejected', not_needed: 'Not Needed',
+  sent: 'Sent', overdue: 'Overdue', paid: 'Paid', void: 'Void',
 }
 
 interface StatusBadgeProps {
@@ -33,7 +38,7 @@ export function StatusBadge({ status, className }: StatusBadgeProps) {
   return (
     <span
       className={cn(
-        'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
+        'inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium',
         styles[status] ?? 'bg-slate-100 text-slate-600',
         className
       )}

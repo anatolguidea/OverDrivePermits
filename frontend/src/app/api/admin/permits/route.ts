@@ -1,24 +1,21 @@
-import { NextResponse, type NextRequest } from 'next/server'
+import type { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { findPermitsByOrder } from '@/lib/repositories/permits.repo'
-import { assertAdmin } from '@/lib/auth/assertAdmin'
-import { getErrorMessage } from '@/lib/errors'
+import { requireAdmin } from '@/lib/auth/assertAdmin'
+import { apiSuccess, handleApiError, parseWithSchema } from '@/lib/http/admin'
+import { orderScopedQuerySchema } from '@/lib/validators/admin-api.schema'
 
 export async function GET(request: NextRequest) {
   const supabase = await createClient()
-  if (!(await assertAdmin(supabase))) {
-    return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
-  }
-
-  const order_id = request.nextUrl.searchParams.get('order_id')
-  if (!order_id) {
-    return NextResponse.json({ success: false, error: 'order_id required' }, { status: 400 })
-  }
-
   try {
+    await requireAdmin(supabase)
+    const { order_id } = parseWithSchema(
+      orderScopedQuerySchema,
+      Object.fromEntries(request.nextUrl.searchParams)
+    )
     const data = await findPermitsByOrder(supabase, order_id)
-    return NextResponse.json({ success: true, data })
+    return apiSuccess(data)
   } catch (err) {
-    return NextResponse.json({ success: false, error: getErrorMessage(err) }, { status: 500 })
+    return handleApiError(err)
   }
 }

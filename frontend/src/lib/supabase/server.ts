@@ -2,8 +2,10 @@ import 'server-only'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import type { Database } from './types'
+import { ensureCriticalEnvConfigured } from '@/lib/config/env'
 
 export async function createClient() {
+  ensureCriticalEnvConfigured()
   const cookieStore = await cookies()
 
   return createServerClient<Database>(
@@ -29,6 +31,7 @@ export async function createClient() {
 }
 
 export async function createServiceClient() {
+  ensureCriticalEnvConfigured()
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!serviceKey) {
     throw new Error('SUPABASE_SERVICE_ROLE_KEY is not configured')

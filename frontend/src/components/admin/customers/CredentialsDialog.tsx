@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { csrfFetch } from '@/lib/http/client'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { KeyRound, Eye, EyeOff, Plus, Trash2 } from 'lucide-react'
@@ -23,13 +24,6 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import {
   Table,
   TableBody,
   TableCell,
@@ -40,7 +34,6 @@ import {
 import { ConfirmDialog } from '@/components/admin/shared/ConfirmDialog'
 import { EmptyState } from '@/components/admin/shared/EmptyState'
 import { useToast } from '@/hooks/use-toast'
-import { US_STATES } from '@/lib/constants/us-states'
 
 interface CredentialsDialogProps {
   customerId: string
@@ -103,7 +96,7 @@ function CredentialManager({ customerId, initialCredentials }: { customerId: str
     if (!deleteTarget) return
     setDeleteLoading(true)
     try {
-      const res = await fetch(`/api/admin/credentials/${deleteTarget.id}`, { method: 'DELETE' })
+      const res = await csrfFetch(`/api/admin/credentials/${deleteTarget.id}`, { method: 'DELETE' })
       const json = await res.json()
       if (!json.success) throw new Error(json.error)
       setCreds((prev) => prev.filter((c) => c.id !== deleteTarget.id))
@@ -122,7 +115,7 @@ function CredentialManager({ customerId, initialCredentials }: { customerId: str
   }
 
   function onAdded(cred: CredentialDisplay) {
-    setCreds((prev) => [...prev, cred].sort((a, b) => a.state_code.localeCompare(b.state_code)))
+    setCreds((prev) => [...prev, cred].sort((a, b) => a.jurisdiction.localeCompare(b.jurisdiction)))
     setAddOpen(false)
   }
 
@@ -144,7 +137,7 @@ function CredentialManager({ customerId, initialCredentials }: { customerId: str
             <TableBody>
               {creds.map((c) => (
                 <TableRow key={c.id} className="group">
-                  <TableCell className="font-mono font-medium">{c.state_code}</TableCell>
+                  <TableCell className="font-mono font-medium">{c.jurisdiction}</TableCell>
                   <TableCell className="text-sm">{c.username}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1.5">
@@ -209,7 +202,7 @@ function CredentialManager({ customerId, initialCredentials }: { customerId: str
         open={!!deleteTarget}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
         title="Remove credential"
-        description={`Remove ${deleteTarget?.state_code} credential for "${deleteTarget?.username}"? This cannot be undone.`}
+        description={`Remove ${deleteTarget?.jurisdiction} credential for "${deleteTarget?.username}"? This cannot be undone.`}
         confirmLabel="Remove"
         destructive
         loading={deleteLoading}
@@ -234,13 +227,13 @@ function AddCredentialForm({
 
   const form = useForm<CredentialFormValues>({
     resolver: zodResolver(credentialSchema),
-    defaultValues: { state_code: '', username: '', password: '', notes: '' },
+    defaultValues: { jurisdiction: '', username: '', password: '', notes: '' },
   })
 
   async function onSubmit(values: CredentialFormValues) {
     setLoading(true)
     try {
-      const res = await fetch('/api/admin/credentials', {
+      const res = await csrfFetch('/api/admin/credentials', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ customer_id: customerId, ...values }),
@@ -259,15 +252,10 @@ function AddCredentialForm({
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-3">
-        <FormField control={form.control} name="state_code" render={({ field }) => (
+        <FormField control={form.control} name="jurisdiction" render={({ field }) => (
           <FormItem>
-            <FormLabel>State *</FormLabel>
-            <Select onValueChange={field.onChange} value={field.value}>
-              <FormControl><SelectTrigger><SelectValue placeholder="Select state" /></SelectTrigger></FormControl>
-              <SelectContent>
-                {US_STATES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <FormLabel>Jurisdiction *</FormLabel>
+            <FormControl><Input placeholder="e.g. TX, CA" autoComplete="off" {...field} /></FormControl>
             <FormMessage />
           </FormItem>
         )} />

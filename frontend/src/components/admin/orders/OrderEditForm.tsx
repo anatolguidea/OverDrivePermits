@@ -1,9 +1,10 @@
 'use client'
 import { useState } from 'react'
+import { csrfFetch } from '@/lib/http/client'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
+import { ChevronDown, ChevronRight } from 'lucide-react'
 import {
   Form,
   FormControl,
@@ -23,54 +24,72 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/hooks/use-toast'
+import { updateOrderSchema, type UpdateOrderValues } from '@/lib/validators/order.schema'
 import type { OrderRow } from '@/lib/repositories/orders.repo'
-import type { VehicleRow } from '@/lib/repositories/vehicles.repo'
-
-const editSchema = z.object({
-  vehicle_id:  z.string().optional(),
-  origin:      z.string().optional(),
-  destination: z.string().optional(),
-  trip_date:   z.string().optional(),
-  notes:       z.string().optional(),
-})
-
-type EditFormValues = z.infer<typeof editSchema>
+import type { TruckRow } from '@/lib/repositories/trucks.repo'
+import type { TrailerRow } from '@/lib/repositories/trailers.repo'
 
 interface OrderEditFormProps {
   order: OrderRow
-  vehicles: VehicleRow[]
+  trucks: TruckRow[]
+  trailers: TrailerRow[]
 }
 
-export function OrderEditForm({ order, vehicles }: OrderEditFormProps) {
+type Dims = NonNullable<UpdateOrderValues['dimensions']>
+
+function parseDims(raw: unknown): Dims | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const d = raw as Record<string, unknown>
+  return {
+    length:         Number(d.length ?? 0),
+    width:          Number(d.width ?? 0),
+    height:         Number(d.height ?? 0),
+    weight:         Number(d.weight ?? 0),
+    overhang_front: Number(d.overhang_front ?? 0),
+    overhang_rear:  Number(d.overhang_rear ?? 0),
+    overhang_left:  Number(d.overhang_left ?? 0),
+    overhang_right: Number(d.overhang_right ?? 0),
+  }
+}
+
+export function OrderEditForm({ order, trucks, trailers }: OrderEditFormProps) {
+  const NONE_VALUE = '__none__'
   const router = useRouter()
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
+  const [dimensionsOpen, setDimensionsOpen] = useState(!!order.dimensions)
 
-  const form = useForm<EditFormValues>({
-    resolver: zodResolver(editSchema),
+  const form = useForm<UpdateOrderValues>({
+    resolver: zodResolver(updateOrderSchema),
     defaultValues: {
-      vehicle_id:  order.vehicles?.id ?? '',
-      origin:      order.origin ?? '',
-      destination: order.destination ?? '',
-      trip_date:   order.trip_date ?? '',
-      notes:       order.notes ?? '',
+      truck_id:          order.trucks?.id ?? '',
+      trailer_id:        order.trailers?.id ?? '',
+      driver_name:       order.driver_name ?? '',
+      origin:            order.origin ?? '',
+      destination:       order.destination ?? '',
+      trip_date:         order.trip_date ?? '',
+      service_fee_cents: order.service_fee_cents ?? 0,
+      notes:             order.notes ?? '',
+      dimensions:        parseDims(order.dimensions),
     },
   })
 
-  async function onSubmit(values: EditFormValues) {
+  async function onSubmit(values: UpdateOrderValues) {
     setLoading(true)
     try {
       const payload: Record<string, unknown> = {
-        origin:      values.origin      || null,
-        destination: values.destination || null,
-        trip_date:   values.trip_date   || null,
-        notes:       values.notes       || null,
-        vehicle_id:  values.vehicle_id && values.vehicle_id !== '__none__'
-          ? values.vehicle_id
-          : null,
+        origin:            values.origin      || null,
+        destination:       values.destination || null,
+        trip_date:         values.trip_date   || null,
+        driver_name:       values.driver_name || null,
+        notes:             values.notes       || null,
+        truck_id:          values.truck_id    || null,
+        trailer_id:        values.trailer_id  || null,
+        service_fee_cents: values.service_fee_cents ?? 0,
+        dimensions:        values.dimensions ?? null,
       }
 
-      const res = await fetch(`/api/admin/orders/${order.id}`, {
+      const res = await csrfFetch(`/api/admin/orders/${order.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -93,33 +112,79 @@ export function OrderEditForm({ order, vehicles }: OrderEditFormProps) {
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         <div className="rounded-lg border border-border bg-card p-5 space-y-4">
 
-          {/* Vehicle */}
+          {/* Truck + Trailer */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField
+              control={form.control}
+              name="truck_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Truck</FormLabel>
+                  <Select
+                    onValueChange={(v) => field.onChange(v === NONE_VALUE ? '' : v)}
+                    value={field.value || NONE_VALUE}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="No truck selected" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value={NONE_VALUE}>None</SelectItem>
+                      {trucks.map((t) => (
+                        <SelectItem key={t.id} value={t.id}>
+                          {t.unit_number}
+                          {t.make ? ` — ${t.make}` : ''}
+                          {t.year ? ` ${t.year}` : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="trailer_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Trailer</FormLabel>
+                  <Select
+                    onValueChange={(v) => field.onChange(v === NONE_VALUE ? '' : v)}
+                    value={field.value || NONE_VALUE}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="No trailer selected" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value={NONE_VALUE}>None</SelectItem>
+                      {trailers.map((t) => (
+                        <SelectItem key={t.id} value={t.id}>
+                          {t.unit_number}
+                          {t.trailer_type ? ` — ${t.trailer_type}` : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
+          {/* Driver */}
           <FormField
             control={form.control}
-            name="vehicle_id"
+            name="driver_name"
             render={({ field }) => (
-              <FormItem>
-                <FormLabel>Vehicle</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value ?? ''}>
-                  <FormControl>
-                    <SelectTrigger className="w-72">
-                      <SelectValue placeholder="No vehicle selected" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value="__none__">None</SelectItem>
-                    {vehicles.map((v) => (
-                      <SelectItem key={v.id} value={v.id}>
-                        {v.unit_number}
-                        {v.make ? ` — ${v.make}` : ''}
-                        {v.year ? ` ${v.year}` : ''}
-                        <span className="ml-1 capitalize text-muted-foreground">
-                          ({v.vehicle_type})
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <FormItem className="max-w-72">
+                <FormLabel>Driver Name</FormLabel>
+                <FormControl>
+                  <Input placeholder="John Smith" {...field} value={field.value ?? ''} />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}
@@ -134,7 +199,7 @@ export function OrderEditForm({ order, vehicles }: OrderEditFormProps) {
                 <FormItem>
                   <FormLabel>Origin</FormLabel>
                   <FormControl>
-                    <Input placeholder="City, State" {...field} />
+                    <Input placeholder="City, State" {...field} value={field.value ?? ''} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -147,7 +212,7 @@ export function OrderEditForm({ order, vehicles }: OrderEditFormProps) {
                 <FormItem>
                   <FormLabel>Destination</FormLabel>
                   <FormControl>
-                    <Input placeholder="City, State" {...field} />
+                    <Input placeholder="City, State" {...field} value={field.value ?? ''} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -155,20 +220,45 @@ export function OrderEditForm({ order, vehicles }: OrderEditFormProps) {
             />
           </div>
 
-          {/* Trip date */}
-          <FormField
-            control={form.control}
-            name="trip_date"
-            render={({ field }) => (
-              <FormItem className="w-48">
-                <FormLabel>Trip Date</FormLabel>
-                <FormControl>
-                  <Input type="date" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+          {/* Trip date + Service fee */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField
+              control={form.control}
+              name="trip_date"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Trip Date</FormLabel>
+                  <FormControl>
+                    <Input type="date" {...field} value={field.value ?? ''} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="service_fee_cents"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Service Fee ($)</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="0.00"
+                      value={field.value ? (field.value / 100).toFixed(2) : ''}
+                      onChange={(e) => {
+                        const dollars = parseFloat(e.target.value)
+                        field.onChange(isNaN(dollars) ? 0 : Math.round(dollars * 100))
+                      }}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
 
           {/* Notes */}
           <FormField
@@ -178,12 +268,89 @@ export function OrderEditForm({ order, vehicles }: OrderEditFormProps) {
               <FormItem>
                 <FormLabel>Notes</FormLabel>
                 <FormControl>
-                  <Textarea rows={3} placeholder="Internal notes…" {...field} />
+                  <Textarea rows={3} placeholder="Internal notes…" {...field} value={field.value ?? ''} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
             )}
           />
+
+          {/* Dimensions (collapsible) */}
+          <div>
+            <button
+              type="button"
+              onClick={() => setDimensionsOpen((o) => !o)}
+              className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {dimensionsOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+              Load Dimensions
+            </button>
+            {dimensionsOpen && (
+              <div className="mt-3 grid gap-3 sm:grid-cols-4">
+                {(
+                  [
+                    { name: 'dimensions.length',         label: 'Length (ft)' },
+                    { name: 'dimensions.width',          label: 'Width (ft)'  },
+                    { name: 'dimensions.height',         label: 'Height (ft)' },
+                    { name: 'dimensions.weight',         label: 'Weight (lbs)'},
+                  ] as const
+                ).map(({ name, label }) => (
+                  <FormField
+                    key={name}
+                    control={form.control}
+                    name={name}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs">{label}</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            placeholder="0"
+                            value={field.value ?? ''}
+                            onChange={(e) => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                ))}
+                <p className="col-span-4 text-xs text-muted-foreground">Overhang</p>
+                {(
+                  [
+                    { name: 'dimensions.overhang_front', label: 'Front (ft)' },
+                    { name: 'dimensions.overhang_rear',  label: 'Rear (ft)'  },
+                    { name: 'dimensions.overhang_left',  label: 'Left (ft)'  },
+                    { name: 'dimensions.overhang_right', label: 'Right (ft)' },
+                  ] as const
+                ).map(({ name, label }) => (
+                  <FormField
+                    key={name}
+                    control={form.control}
+                    name={name}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs">{label}</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            placeholder="0"
+                            value={field.value ?? ''}
+                            onChange={(e) => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="flex gap-3">

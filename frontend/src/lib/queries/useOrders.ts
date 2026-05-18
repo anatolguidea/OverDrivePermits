@@ -21,11 +21,14 @@ async function fetchOrders(filters: OrderFilters): Promise<OrdersPage> {
   return res.json()
 }
 
-export function useOrders(filters: OrderFilters = {}) {
+export function useOrders(filters: OrderFilters = {}, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ordersQueryKey(filters),
     queryFn: () => fetchOrders(filters),
+    enabled: options?.enabled ?? true,
     placeholderData: keepPreviousData,
-    staleTime: 30_000,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
+    staleTime: 10_000,
   })
 }

@@ -44,24 +44,23 @@ export default async function OrderDetailPage({ params }: { params: { id: string
   const totalCost = permits.reduce((sum, p) => sum + (p.cost ?? 0), 0)
 
   return (
-    <div className="max-w-4xl space-y-6">
-      {/* Back */}
+    <div className="space-y-5">
       <Button variant="ghost" size="sm" asChild className="-ml-2">
         <Link href="/admin/orders">
           <ArrowLeft className="mr-1.5 h-4 w-4" /> Orders
         </Link>
       </Button>
 
-      {/* Header */}
-      <div className="flex items-start justify-between">
+      <div className="admin-page-header">
         <div>
+          <p className="admin-section-label">Order</p>
           <div className="flex items-center gap-3">
-            <h2 className="font-mono text-2xl font-bold tracking-tight">
+            <h1 className="admin-page-title admin-mono">
               {order.order_number}
-            </h2>
+            </h1>
             <StatusBadge status={order.status} />
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="admin-page-meta">
             Created {format(new Date(order.created_at), 'MMM d, yyyy')}
           </p>
         </div>
@@ -80,7 +79,6 @@ export default async function OrderDetailPage({ params }: { params: { id: string
         </div>
       </div>
 
-      {/* Info cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <InfoCard label="Customer">
           <Link
@@ -95,11 +93,22 @@ export default async function OrderDetailPage({ params }: { params: { id: string
         </InfoCard>
 
         <InfoCard label="Vehicle">
-          {order.vehicles ? (
+          {order.trucks ? (
             <>
-              <p className="font-medium">{order.vehicles.unit_number}</p>
-              <p className="text-xs capitalize text-muted-foreground">{order.vehicles.vehicle_type}</p>
+              <p className="font-medium">{order.trucks.unit_number}</p>
+              <p className="text-xs capitalize text-muted-foreground">
+                truck{order.driver_name ? ` · ${order.driver_name}` : ''}
+              </p>
             </>
+          ) : order.trailers ? (
+            <>
+              <p className="font-medium">{order.trailers.unit_number}</p>
+              <p className="text-xs capitalize text-muted-foreground">
+                trailer{order.driver_name ? ` · ${order.driver_name}` : ''}
+              </p>
+            </>
+          ) : order.driver_name ? (
+            <p className="font-medium">{order.driver_name}</p>
           ) : (
             <p className="text-muted-foreground">—</p>
           )}
@@ -119,32 +128,41 @@ export default async function OrderDetailPage({ params }: { params: { id: string
         </InfoCard>
       </div>
 
-      {/* Permit progress summary bar */}
-      <div className="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3">
+      <div className="admin-panel flex items-center justify-between px-4 py-3">
         <div className="flex items-center gap-3">
           <span className="text-sm font-medium">Progress</span>
           <PermitProgressChips
             permits={permits.map((p) => ({
-              state_code: p.state_code,
-              status: p.status,
-              cost: p.cost,
+              id:            p.id,
+              jurisdiction:  p.jurisdiction,
+              status:        p.status,
+              cost:          p.cost,
+              sort_order:    p.sort_order,
+              permit_number: p.permit_number,
+              document_url:  p.document_url,
             }))}
           />
         </div>
-        {totalCost > 0 && (
-          <span className="font-mono text-sm font-semibold">
-            Total: ${totalCost.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-          </span>
-        )}
+        <div className="text-right">
+          {totalCost > 0 && (
+            <p className="font-mono text-sm font-semibold">
+              Permits: ${totalCost.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+            </p>
+          )}
+          {order.service_fee_cents > 0 && (
+            <p className="font-mono text-xs text-muted-foreground">
+              Service fee: ${(order.service_fee_cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+            </p>
+          )}
+        </div>
       </div>
 
-      {/* Permit rows */}
       <div id="permits">
         <div className="mb-3 flex items-center justify-between">
           <h3 className="font-semibold">Permits ({permits.length})</h3>
         </div>
-        {/* Column header */}
-        <div className="mb-1 grid grid-cols-[64px_120px_180px_140px_auto] gap-3 px-4 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        <div className="mb-1 grid grid-cols-[24px_64px_120px_180px_140px_auto] gap-3 px-4 text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">
+          <span />
           <span>State</span>
           <span>Status</span>
           <span>Permit #</span>
@@ -158,10 +176,9 @@ export default async function OrderDetailPage({ params }: { params: { id: string
         />
       </div>
 
-      {/* Notes */}
       {order.notes && (
-        <div className="rounded-lg border border-border bg-card p-4">
-          <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Notes</p>
+        <div className="admin-panel p-4">
+          <p className="mb-1 admin-section-label">Notes</p>
           <p className="whitespace-pre-wrap text-sm">{order.notes}</p>
         </div>
       )}
@@ -171,8 +188,8 @@ export default async function OrderDetailPage({ params }: { params: { id: string
 
 function InfoCard({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-lg border border-border bg-card p-4">
-      <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+    <div className="admin-panel p-4">
+      <p className="mb-2 admin-section-label">{label}</p>
       {children}
     </div>
   )

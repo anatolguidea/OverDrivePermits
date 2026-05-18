@@ -1,9 +1,10 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { Pencil, Building2, Phone, Mail, MapPin } from 'lucide-react'
+import { Pencil, Building2, Phone, Mail, MapPin, User } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { findCustomerById } from '@/lib/repositories/customers.repo'
-import { findVehiclesByCustomer } from '@/lib/repositories/vehicles.repo'
+import { findTrucksByCustomer } from '@/lib/repositories/trucks.repo'
+import { findTrailersByCustomer } from '@/lib/repositories/trailers.repo'
 import { findCredentialsByCustomer } from '@/lib/repositories/credentials.repo'
 import { findOrders } from '@/lib/repositories/orders.repo'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -23,9 +24,10 @@ export async function generateMetadata({ params }: { params: { id: string } }) {
 export default async function CustomerDetailPage({ params }: { params: { id: string } }) {
   const supabase = await createClient()
 
-  const [customer, vehicles, credentials, ordersPage] = await Promise.all([
+  const [customer, trucks, trailers, credentials, ordersPage] = await Promise.all([
     findCustomerById(supabase, params.id),
-    findVehiclesByCustomer(supabase, params.id),
+    findTrucksByCustomer(supabase, params.id, true),
+    findTrailersByCustomer(supabase, params.id, true),
     findCredentialsByCustomer(supabase, params.id),
     findOrders(supabase, { customer_id: params.id, page_size: 50 }),
   ])
@@ -33,17 +35,22 @@ export default async function CustomerDetailPage({ params }: { params: { id: str
   if (!customer) notFound()
 
   const orders = ordersPage.data
+  const fleetCount = trucks.length + trailers.length
+  const hasFein = !!(customer.fein || customer.fein_ciphertext)
 
   return (
-    <div className="max-w-5xl space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between">
+    <div className="space-y-5">
+      <div className="admin-page-header">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">{customer.name}</h2>
-          <div className="mt-1 flex flex-wrap gap-3 text-sm text-muted-foreground">
+          <p className="admin-section-label">Customer</p>
+          <h1 className="admin-page-title">{customer.name}</h1>
+          {customer.dba_name && (
+            <p className="admin-page-meta">DBA: {customer.dba_name}</p>
+          )}
+          <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
             {customer.usdot     && <span>USDOT {customer.usdot}</span>}
             {customer.mc_number && <span>MC {customer.mc_number}</span>}
-            {customer.fein      && <span>FEIN {customer.fein}</span>}
+            {hasFein            && <span>FEIN ••••••</span>}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -64,9 +71,9 @@ export default async function CustomerDetailPage({ params }: { params: { id: str
       </div>
 
       <Tabs defaultValue="overview">
-        <TabsList>
+        <TabsList className="h-auto rounded-lg border border-slate-200 bg-white p-1">
           <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="fleet">Fleet ({vehicles.length})</TabsTrigger>
+          <TabsTrigger value="fleet">Fleet ({fleetCount})</TabsTrigger>
           <TabsTrigger value="orders">Orders ({orders.length})</TabsTrigger>
         </TabsList>
 
@@ -76,8 +83,22 @@ export default async function CustomerDetailPage({ params }: { params: { id: str
             {customer.email && (
               <InfoCard icon={<Mail className="h-4 w-4" />} label="Email" value={customer.email} />
             )}
+            {customer.billing_email && (
+              <InfoCard icon={<Mail className="h-4 w-4" />} label="Billing Email" value={customer.billing_email} />
+            )}
             {customer.phone && (
               <InfoCard icon={<Phone className="h-4 w-4" />} label="Phone" value={customer.phone} />
+            )}
+            {customer.contact_name && (
+              <InfoCard
+                icon={<User className="h-4 w-4" />}
+                label="Contact"
+                value={[
+                  customer.contact_name,
+                  customer.contact_phone,
+                  customer.contact_email,
+                ].filter(Boolean).join(' · ')}
+              />
             )}
             {(customer.address_line1 || customer.city) && (
               <InfoCard
@@ -87,20 +108,25 @@ export default async function CustomerDetailPage({ params }: { params: { id: str
                   customer.address_line1,
                   customer.address_line2,
                   [customer.city, customer.state_code, customer.zip].filter(Boolean).join(' '),
-                ]
-                  .filter(Boolean)
-                  .join(', ')}
+                ].filter(Boolean).join(', ')}
               />
             )}
             {customer.ifta_number && (
               <InfoCard icon={<Building2 className="h-4 w-4" />} label="IFTA #" value={customer.ifta_number} />
+            )}
+            {customer.notes && (
+              <InfoCard icon={<Building2 className="h-4 w-4" />} label="Notes" value={customer.notes} />
             )}
           </div>
         </TabsContent>
 
         {/* Fleet */}
         <TabsContent value="fleet" className="mt-4">
-          <FleetTable customerId={customer.id} initialVehicles={vehicles} />
+          <FleetTable
+            customerId={customer.id}
+            initialTrucks={trucks}
+            initialTrailers={trailers}
+          />
         </TabsContent>
 
         {/* Orders */}
@@ -108,12 +134,12 @@ export default async function CustomerDetailPage({ params }: { params: { id: str
           {orders.length === 0 ? (
             <p className="text-sm text-muted-foreground">No orders yet.</p>
           ) : (
-            <div className="rounded-md border border-border divide-y divide-border">
+            <div className="admin-table-wrap divide-y divide-slate-200">
               {orders.map((order) => (
-                <div key={order.id} className="flex items-center gap-4 px-4 py-3">
+                <div key={order.id} className="flex items-center gap-4 px-4 py-3 hover:bg-slate-50/70">
                   <Link
                     href={`/admin/orders/${order.id}`}
-                    className="font-mono text-xs font-medium text-primary hover:underline w-32 shrink-0"
+                    className="admin-mono text-xs font-medium text-primary hover:underline w-32 shrink-0"
                   >
                     {order.order_number}
                   </Link>
@@ -136,11 +162,11 @@ export default async function CustomerDetailPage({ params }: { params: { id: str
 
 function InfoCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
-    <div className="flex gap-3 rounded-lg border border-border bg-card p-4">
+    <div className="admin-panel flex gap-3 p-4">
       <div className="mt-0.5 text-muted-foreground">{icon}</div>
       <div>
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-        <p className="mt-1 text-sm">{value}</p>
+        <p className="admin-section-label">{label}</p>
+        <p className="mt-1 text-sm whitespace-pre-line">{value}</p>
       </div>
     </div>
   )

@@ -27,6 +27,8 @@ export function useInvoices(filters: InvoiceFilters = {}) {
     queryKey: invoicesQueryKey(filters),
     queryFn: () => fetchInvoices(filters),
     placeholderData: keepPreviousData,
-    staleTime: 30_000,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
+    staleTime: 10_000,
   })
 }

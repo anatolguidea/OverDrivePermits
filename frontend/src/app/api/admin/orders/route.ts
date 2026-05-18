@@ -1,78 +1,73 @@
-import { NextResponse, type NextRequest } from 'next/server'
+import type { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { findOrders, type OrderFilters } from '@/lib/repositories/orders.repo'
+import { findOrders } from '@/lib/repositories/orders.repo'
+import { ensureCustomerExists } from '@/lib/repositories/customers.repo'
 import { newOrderSchema } from '@/lib/validators/order.schema'
-import { assertAdmin } from '@/lib/auth/assertAdmin'
-import { getErrorMessage } from '@/lib/errors'
-import type { OrderStatus } from '@/lib/supabase/types'
+import { requireAdmin } from '@/lib/auth/assertAdmin'
+import { apiCreated, apiPage, handleApiError, parseWithSchema } from '@/lib/http/admin'
+import { conflict } from '@/lib/errors'
+import { ordersListQuerySchema } from '@/lib/validators/admin-api.schema'
+
+export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
   const supabase = await createClient()
-
-  if (!(await assertAdmin(supabase))) {
-    return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
-  }
-
-  const sp = request.nextUrl.searchParams
-
-  const filters: OrderFilters = {
-    status: (sp.get('status') as OrderStatus | 'all') || 'all',
-    customer_id: sp.get('customer_id') || undefined,
-    date_from: sp.get('date_from') || undefined,
-    date_to: sp.get('date_to') || undefined,
-    search: sp.get('search') || undefined,
-    page: sp.get('page') ? Number(sp.get('page')) : 1,
-    page_size: sp.get('page_size') ? Number(sp.get('page_size')) : 25,
-  }
-
   try {
+    await requireAdmin(supabase)
+    const filters = parseWithSchema(
+      ordersListQuerySchema,
+      Object.fromEntries(request.nextUrl.searchParams)
+    )
     const result = await findOrders(supabase, filters)
-    return NextResponse.json({ success: true, ...result })
+    return apiPage(result, { headers: { 'Cache-Control': 'no-store' } })
   } catch (err) {
-    return NextResponse.json({ success: false, error: getErrorMessage(err) }, { status: 500 })
+    return handleApiError(err)
   }
 }
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
-  const user = await assertAdmin(supabase)
-  if (!user) {
-    return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
-  }
-
-  const body = await request.json()
-
-  // Validate shape of incoming payload
-  const parsed = newOrderSchema.safeParse(body.order
-    ? { ...body.order, permits: body.permits }
-    : body
-  )
-  if (!parsed.success) {
-    return NextResponse.json({ success: false, error: parsed.error.flatten() }, { status: 422 })
-  }
-
   try {
+    const { user } = await requireAdmin(supabase, ['owner', 'admin', 'dispatcher'])
+    const body = await request.json()
+    const parsed = parseWithSchema(
+      newOrderSchema,
+      body.order ? { ...body.order, permits: body.permits } : body
+    )
+    await ensureCustomerExists(supabase, parsed.customer_id)
+
+    const permits = parsed.permits.map((permit) => ({
+      ...permit,
+      jurisdiction: permit.jurisdiction.trim().toUpperCase(),
+    }))
+
+    const uniqueJurisdictions = new Set(permits.map((permit) => permit.jurisdiction))
+    if (uniqueJurisdictions.size !== permits.length) {
+      throw conflict('Duplicate permit jurisdictions are not allowed')
+    }
+
     const { data, error } = await supabase.rpc('create_order_with_permits', {
       p_order: {
-        customer_id:  parsed.data.customer_id,
-        vehicle_id:   parsed.data.vehicle_id || null,
-        status:       parsed.data.status,
-        origin:       parsed.data.origin || null,
-        destination:  parsed.data.destination || null,
-        route_states: parsed.data.permits.map((p) => p.state_code),
-        trip_date:    parsed.data.trip_date || null,
-        notes:        parsed.data.notes || null,
-        created_by:   user.id,
+        customer_id: parsed.customer_id,
+        truck_id: parsed.truck_id || null,
+        trailer_id: parsed.trailer_id || null,
+        status: parsed.status,
+        origin: parsed.origin || null,
+        destination: parsed.destination || null,
+        route_states: permits.map((permit) => permit.jurisdiction),
+        trip_date: parsed.trip_date || null,
+        notes: parsed.notes || null,
+        created_by: user.id,
       },
-      p_permits: parsed.data.permits.map((p) => ({
-        state_code: p.state_code,
-        cost:       p.cost ?? null,
+      p_permits: permits.map((permit) => ({
+        jurisdiction: permit.jurisdiction,
+        cost: permit.cost ?? null,
       })),
     })
 
     if (error) throw new Error(error.message)
-    return NextResponse.json({ success: true, data }, { status: 201 })
+    return apiCreated(data)
   } catch (err) {
-    return NextResponse.json({ success: false, error: getErrorMessage(err) }, { status: 500 })
+    return handleApiError(err)
   }
 }

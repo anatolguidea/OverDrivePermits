@@ -20,7 +20,7 @@ function OrdersContent() {
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <OrderFilters />
       <OrdersTable filters={filters} />
     </div>
@@ -29,7 +29,7 @@ function OrdersContent() {
 
 export function OrdersTableWithFilters() {
   return (
-    <Suspense fallback={<div className="h-64 animate-pulse rounded-md bg-muted" />}>
+    <Suspense fallback={<div className="h-64 animate-pulse rounded-[1.4rem] bg-white/70" />}>
       <OrdersContent />
     </Suspense>
   )

@@ -4,6 +4,11 @@ import type { Database, PermitStatus } from '@/lib/supabase/types'
 
 export type PermitRow = Database['public']['Tables']['permits']['Row']
 export type PermitUpdate = Database['public']['Tables']['permits']['Update']
+const EXTENSIONS_BY_TYPE: Record<string, string> = {
+  'application/pdf': 'pdf',
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+}
 
 export async function findPermitsByOrder(
   supabase: SupabaseClient<Database>,
@@ -13,7 +18,7 @@ export async function findPermitsByOrder(
     .from('permits')
     .select('*')
     .eq('order_id', order_id)
-    .order('state_code')
+    .order('sort_order', { ascending: true })
 
   if (error) throw new Error(`permits.findByOrder: ${error.message}`)
   return data ?? []
@@ -81,7 +86,7 @@ export async function uploadPermitDocument(
   fileName: string,
   mimeType: string
 ): Promise<string> {
-  const ext = fileName.split('.').pop()?.toLowerCase() ?? 'pdf'
+  const ext = EXTENSIONS_BY_TYPE[mimeType] ?? fileName.split('.').pop()?.toLowerCase() ?? 'pdf'
   const storagePath = `${orderId}/${permitId}.${ext}`
 
   const { error } = await supabase.storage
@@ -98,9 +103,12 @@ export async function uploadPermitDocument(
 // Validate permit status transition
 export function assertValidTransition(from: PermitStatus, to: PermitStatus): void {
   const allowed: Record<PermitStatus, PermitStatus[]> = {
-    pending:   ['submitted'],
-    submitted: ['issued', 'pending'],
-    issued:    [],
+    pending:     ['in_progress', 'submitted', 'not_needed'],
+    in_progress: ['submitted', 'rejected', 'pending'],
+    submitted:   ['issued', 'rejected', 'pending'],
+    issued:      [],
+    rejected:    ['in_progress', 'pending'],
+    not_needed:  ['pending'],
   }
   if (!allowed[from]?.includes(to)) {
     throw new Error(`Invalid status transition: ${from} → ${to}`)

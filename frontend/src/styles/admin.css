@@ -4,57 +4,107 @@
 
 @layer base {
   :root {
-    /* Highway-sign blue palette */
     --background: 210 20% 98%;
-    --foreground: 222 47% 11%;
+    --foreground: 222 32% 12%;
     --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
+    --card-foreground: 222 32% 12%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
-    --primary: 214 84% 38%;
+    --popover-foreground: 222 32% 12%;
+    --primary: 216 82% 29%;
     --primary-foreground: 210 40% 98%;
-    --secondary: 214 15% 94%;
-    --secondary-foreground: 222 47% 11%;
-    --muted: 214 15% 94%;
-    --muted-foreground: 215 13% 40%;
-    --accent: 32 95% 48%;
-    --accent-foreground: 0 0% 100%;
-    --destructive: 0 72% 51%;
+    --secondary: 210 24% 95%;
+    --secondary-foreground: 222 30% 18%;
+    --muted: 210 24% 95%;
+    --muted-foreground: 215 15% 42%;
+    --accent: 37 92% 52%;
+    --accent-foreground: 222 36% 12%;
+    --destructive: 0 72% 46%;
     --destructive-foreground: 210 40% 98%;
-    --border: 214 20% 90%;
-    --input: 214 20% 90%;
-    --ring: 214 84% 38%;
-    --radius: 0.5rem;
+    --border: 214 18% 85%;
+    --input: 214 18% 85%;
+    --ring: 216 82% 29%;
+    --radius: 0.75rem;
   }
 
-  .dark {
-    --background: 222 30% 10%;
-    --foreground: 210 40% 98%;
-    --card: 222 28% 13%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222 28% 13%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 214 84% 55%;
-    --primary-foreground: 222 47% 11%;
-    --secondary: 217 25% 18%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217 25% 18%;
-    --muted-foreground: 215 20% 65%;
-    --accent: 32 95% 55%;
-    --accent-foreground: 0 0% 100%;
-    --destructive: 0 62% 40%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217 25% 20%;
-    --input: 217 25% 20%;
-    --ring: 214 84% 55%;
-  }
-}
-
-@layer base {
   * {
     @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground;
+    font-size: 14px;
+    line-height: 1.4;
+    background-image:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(244, 247, 251, 0.98)),
+      linear-gradient(90deg, rgba(15, 23, 42, 0.025) 1px, transparent 1px),
+      linear-gradient(rgba(15, 23, 42, 0.025) 1px, transparent 1px);
+    background-size: auto, 28px 28px, 28px 28px;
+  }
+
+  ::selection {
+    background: rgba(20, 67, 138, 0.14);
+  }
+}
+
+@layer components {
+  .admin-shell-bg {
+    @apply min-h-screen bg-transparent text-[14px] text-slate-900;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .admin-shell-bg table {
+    font-size: 13px;
+  }
+
+  .admin-panel {
+    @apply rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)];
+  }
+
+  .admin-panel-strong {
+    @apply rounded-xl border border-slate-300 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.05)];
+  }
+
+  .admin-kicker {
+    @apply inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500;
+  }
+
+  .admin-nav-link {
+    @apply flex items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-[13px] font-medium transition-colors;
+  }
+
+  .admin-topbar {
+    @apply rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)];
+  }
+
+  .admin-metric-card {
+    @apply rounded-xl border border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)];
+  }
+
+  .admin-page-header {
+    @apply flex flex-col gap-4 border-b border-slate-200 pb-4 sm:flex-row sm:items-end sm:justify-between;
+  }
+
+  .admin-page-title {
+    @apply text-[24px] font-semibold tracking-[-0.03em] text-slate-950;
+  }
+
+  .admin-page-meta {
+    @apply mt-1 text-sm text-slate-500;
+  }
+
+  .admin-toolbar {
+    @apply flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)];
+  }
+
+  .admin-table-wrap {
+    @apply overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)];
+  }
+
+  .admin-section-label {
+    @apply text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500;
+  }
+
+  .admin-mono {
+    @apply font-mono tabular-nums;
   }
 }

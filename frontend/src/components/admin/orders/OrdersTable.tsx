@@ -1,4 +1,5 @@
 'use client'
+import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import {
@@ -30,7 +31,8 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { StatusBadge } from '@/components/admin/shared/StatusBadge'
 import { EmptyState } from '@/components/admin/shared/EmptyState'
-import { PermitProgressChips } from './PermitProgressChips'
+import { PermitProgressChips, type PermitChip } from './PermitProgressChips'
+import { PermitQuickDrawer } from './PermitQuickDrawer'
 import { useOrders, type OrderFilters } from '@/lib/queries/useOrders'
 import { format } from 'date-fns'
 
@@ -44,10 +46,22 @@ export function OrdersTable({ filters }: OrdersTableProps) {
   const searchParams = useSearchParams()
   const { data, isLoading, isFetching } = useOrders(filters)
 
+  const [activePermit, setActivePermit] = useState<{ permit: PermitChip; orderNumber: string } | null>(null)
+  const [localPermitPatches, setLocalPermitPatches] = useState<Record<string, Partial<PermitChip>>>({})
+
   function setPage(page: number) {
     const params = new URLSearchParams(searchParams.toString())
     params.set('page', String(page))
     router.push(`${pathname}?${params.toString()}`)
+  }
+
+  function handlePermitUpdated(permitId: string, patch: Partial<PermitChip>) {
+    setLocalPermitPatches((prev) => ({ ...prev, [permitId]: { ...prev[permitId], ...patch } }))
+    if (activePermit?.permit.id === permitId) {
+      setActivePermit((prev) =>
+        prev ? { ...prev, permit: { ...prev.permit, ...patch } } : null
+      )
+    }
   }
 
   if (isLoading) return <TableSkeleton />
@@ -85,187 +99,205 @@ export function OrdersTable({ filters }: OrdersTableProps) {
   }
 
   return (
-    <div className={isFetching ? 'opacity-70 transition-opacity' : ''}>
-      <div className="rounded-md border border-border">
-        <Table>
-          <TableHeader>
-            <TableRow className="hover:bg-transparent">
-              <TableHead className="w-32">Order #</TableHead>
-              <TableHead>Customer</TableHead>
-              <TableHead className="w-36">Vehicle</TableHead>
-              <TableHead className="w-28">Trip Date</TableHead>
-              <TableHead className="w-40">Route</TableHead>
-              <TableHead className="min-w-48">Permit Progress</TableHead>
-              <TableHead className="w-24 text-right">Total Cost</TableHead>
-              <TableHead className="w-28">Invoice</TableHead>
-              <TableHead className="w-16" />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {orders.map((order) => {
-              const totalCost = order.permits.reduce(
-                (sum, p) => sum + (p.cost ?? 0),
-                0
-              )
-              const invoice = order.invoices?.[0] ?? null
+    <>
+      <div className={isFetching ? 'opacity-70 transition-opacity' : ''}>
+        <div className="admin-table-wrap">
+          <Table>
+            <TableHeader>
+              <TableRow className="border-b border-slate-200 bg-slate-50 hover:bg-slate-50">
+                <TableHead className="w-32 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Order #</TableHead>
+                <TableHead className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Customer</TableHead>
+                <TableHead className="w-36 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Vehicle / Driver</TableHead>
+                <TableHead className="w-28 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Trip Date</TableHead>
+                <TableHead className="w-40 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Route</TableHead>
+                <TableHead className="min-w-48 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Permit Progress</TableHead>
+                <TableHead className="w-24 text-right text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Total Cost</TableHead>
+                <TableHead className="w-28 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Invoice</TableHead>
+                <TableHead className="w-16" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {orders.map((order) => {
+                const totalCost = order.permits.reduce((sum, p) => sum + (p.cost ?? 0), 0)
+                const invoice = order.invoices?.[0] ?? null
+                const permits: PermitChip[] = order.permits.map((p) => ({
+                  ...p,
+                  ...localPermitPatches[p.id],
+                }))
 
-              return (
-                <TableRow key={order.id} className="group">
-                  <TableCell>
-                    <Link
-                      href={`/admin/orders/${order.id}`}
-                      className="font-mono text-xs font-medium text-primary hover:underline"
-                    >
-                      {order.order_number}
-                    </Link>
-                    <div className="mt-0.5">
-                      <StatusBadge status={order.status} />
-                    </div>
-                  </TableCell>
+                return (
+                  <TableRow key={order.id} className="group border-b border-slate-200 hover:bg-slate-50/70">
+                    <TableCell>
+                      <Link
+                        href={`/admin/orders/${order.id}`}
+                        className="admin-mono text-xs font-medium text-primary hover:underline"
+                      >
+                        {order.order_number}
+                      </Link>
+                      <div className="mt-0.5">
+                        <StatusBadge status={order.status} />
+                      </div>
+                    </TableCell>
 
-                  <TableCell>
-                    <Link
-                      href={`/admin/customers/${order.customers.id}`}
-                      className="text-sm font-medium hover:underline"
-                    >
-                      {order.customers.name}
-                    </Link>
-                    {order.customers.usdot && (
-                      <p className="text-xs text-muted-foreground">
-                        USDOT {order.customers.usdot}
-                      </p>
-                    )}
-                  </TableCell>
-
-                  <TableCell className="text-sm">
-                    {order.vehicles ? (
-                      <>
-                        <span>{order.vehicles.unit_number}</span>
-                        <p className="text-xs capitalize text-muted-foreground">
-                          {order.vehicles.vehicle_type}
+                    <TableCell>
+                      <Link
+                        href={`/admin/customers/${order.customers.id}`}
+                        className="text-sm font-medium hover:underline"
+                      >
+                        {order.customers.name}
+                      </Link>
+                      {order.customers.usdot && (
+                        <p className="text-xs text-muted-foreground">
+                          USDOT {order.customers.usdot}
                         </p>
-                      </>
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
-                  </TableCell>
+                      )}
+                    </TableCell>
 
-                  <TableCell className="text-sm">
-                    {order.trip_date
-                      ? format(new Date(order.trip_date + 'T00:00:00'), 'MMM d, yyyy')
-                      : <span className="text-muted-foreground">—</span>}
-                  </TableCell>
+                    <TableCell className="text-sm">
+                      {order.trucks ? (
+                        <>
+                          <span>{order.trucks.unit_number}</span>
+                          <p className="text-xs text-muted-foreground">
+                            {order.driver_name ?? 'truck'}
+                          </p>
+                        </>
+                      ) : order.trailers ? (
+                        <>
+                          <span>{order.trailers.unit_number}</span>
+                          <p className="text-xs text-muted-foreground">
+                            {order.driver_name ?? 'trailer'}
+                          </p>
+                        </>
+                      ) : order.driver_name ? (
+                        <span className="text-muted-foreground">{order.driver_name}</span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
 
-                  <TableCell className="text-xs text-muted-foreground">
-                    {order.origin && order.destination ? (
-                      <span title={`${order.origin} → ${order.destination}`} className="line-clamp-1">
-                        {order.origin} → {order.destination}
-                      </span>
-                    ) : (
-                      '—'
-                    )}
-                  </TableCell>
+                    <TableCell className="text-sm">
+                      {order.trip_date
+                        ? format(new Date(order.trip_date + 'T00:00:00'), 'MMM d, yyyy')
+                        : <span className="text-muted-foreground">—</span>}
+                    </TableCell>
 
-                  <TableCell>
-                    <PermitProgressChips permits={order.permits} />
-                  </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {order.origin && order.destination ? (
+                        <span title={`${order.origin} → ${order.destination}`} className="line-clamp-1">
+                          {order.origin} → {order.destination}
+                        </span>
+                      ) : '—'}
+                    </TableCell>
 
-                  <TableCell className="text-right font-mono text-sm">
-                    {totalCost > 0
-                      ? `$${totalCost.toLocaleString('en-US', { minimumFractionDigits: 2 })}`
-                      : <span className="text-muted-foreground">—</span>}
-                  </TableCell>
+                    <TableCell>
+                      <PermitProgressChips
+                        permits={permits}
+                        onPermitClick={(p) => setActivePermit({ permit: p, orderNumber: order.order_number })}
+                      />
+                    </TableCell>
 
-                  <TableCell>
-                    {invoice ? (
-                      <StatusBadge status={invoice.status} />
-                    ) : (
-                      <span className="text-xs text-muted-foreground">None</span>
-                    )}
-                  </TableCell>
+                    <TableCell className="text-right admin-mono text-sm">
+                      {totalCost > 0
+                        ? `$${totalCost.toLocaleString('en-US', { minimumFractionDigits: 2 })}`
+                        : <span className="text-muted-foreground">—</span>}
+                    </TableCell>
 
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
-                        >
-                          <MoreHorizontal className="h-4 w-4" />
-                          <span className="sr-only">Actions</span>
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-44">
-                        <DropdownMenuItem asChild>
-                          <Link href={`/admin/orders/${order.id}`}>
-                            <Eye className="mr-2 h-3.5 w-3.5" /> View Order
-                          </Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem asChild>
-                          <Link href={`/admin/orders/${order.id}/edit`}>
-                            <Pencil className="mr-2 h-3.5 w-3.5" /> Edit Order
-                          </Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem asChild>
-                          <Link href={`/admin/orders/${order.id}#permits`}>
-                            <FileText className="mr-2 h-3.5 w-3.5" /> Manage Permits
-                          </Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem asChild>
-                          <Link href={`/admin/invoices/new?order_id=${order.id}`}>
-                            <Receipt className="mr-2 h-3.5 w-3.5" /> Create Invoice
-                          </Link>
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              )
-            })}
-          </TableBody>
-        </Table>
+                    <TableCell>
+                      {invoice ? (
+                        <StatusBadge status={invoice.status} />
+                      ) : (
+                        <span className="text-xs text-muted-foreground">None</span>
+                      )}
+                    </TableCell>
+
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 rounded-md opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                            <span className="sr-only">Actions</span>
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-44">
+                          <DropdownMenuItem asChild>
+                            <Link href={`/admin/orders/${order.id}`}>
+                              <Eye className="mr-2 h-3.5 w-3.5" /> View Order
+                            </Link>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem asChild>
+                            <Link href={`/admin/orders/${order.id}/edit`}>
+                              <Pencil className="mr-2 h-3.5 w-3.5" /> Edit Order
+                            </Link>
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem asChild>
+                            <Link href={`/admin/orders/${order.id}#permits`}>
+                              <FileText className="mr-2 h-3.5 w-3.5" /> Manage Permits
+                            </Link>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem asChild>
+                            <Link href={`/admin/invoices/new?order_id=${order.id}`}>
+                              <Receipt className="mr-2 h-3.5 w-3.5" /> Create Invoice
+                            </Link>
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
+            </TableBody>
+          </Table>
+        </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="mt-4 flex items-center justify-between text-sm text-muted-foreground">
+            <span>
+              Showing {(page - 1) * page_size + 1}–{Math.min(page * page_size, total)} of {total}
+            </span>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-7 w-7"
+                disabled={page <= 1}
+                onClick={() => setPage(page - 1)}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="px-2 text-xs">{page} / {totalPages}</span>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-7 w-7"
+                disabled={page >= totalPages}
+                onClick={() => setPage(page + 1)}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="mt-3 flex items-center justify-between text-sm text-muted-foreground">
-          <span>
-            Showing {(page - 1) * page_size + 1}–{Math.min(page * page_size, total)} of {total}
-          </span>
-          <div className="flex items-center gap-1">
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-7 w-7"
-              disabled={page <= 1}
-              onClick={() => setPage(page - 1)}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <span className="px-2 text-xs">
-              {page} / {totalPages}
-            </span>
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-7 w-7"
-              disabled={page >= totalPages}
-              onClick={() => setPage(page + 1)}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-      )}
-    </div>
+      <PermitQuickDrawer
+        permit={activePermit?.permit ?? null}
+        orderNumber={activePermit?.orderNumber ?? ''}
+        onClose={() => setActivePermit(null)}
+        onUpdated={handlePermitUpdated}
+      />
+    </>
   )
 }
 
 function TableSkeleton() {
   return (
-    <div className="space-y-2 rounded-md border border-border p-4">
+    <div className="space-y-2 admin-table-wrap p-4">
       {Array.from({ length: 8 }).map((_, i) => (
         <Skeleton key={i} className="h-10 w-full" />
       ))}

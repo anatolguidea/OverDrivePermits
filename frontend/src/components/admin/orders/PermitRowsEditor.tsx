@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 export interface PermitRow {
-  state_code: string
+  jurisdiction: string
   cost?: number
 }
 
@@ -45,9 +45,9 @@ export function PermitRowsEditor({ rows, onChange, error }: PermitRowsEditorProp
         <span />
       </div>
       {rows.map((row, i) => (
-        <div key={row.state_code} className="grid grid-cols-[60px_1fr_32px] items-center gap-2">
+        <div key={row.jurisdiction} className="grid grid-cols-[60px_1fr_32px] items-center gap-2">
           <span className="inline-flex items-center justify-center rounded-md bg-slate-100 px-2 py-1 font-mono text-xs font-semibold text-slate-700">
-            {row.state_code}
+            {row.jurisdiction}
           </span>
           <Input
             type="number"

@@ -2,6 +2,7 @@ import 'server-only'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database, InvoiceStatus } from '@/lib/supabase/types'
 import type { NewInvoiceValues, UpdateInvoiceValues } from '@/lib/validators/invoice.schema'
+import { conflict, notFound } from '@/lib/errors'
 
 export interface InvoiceRow {
   id: string
@@ -127,6 +128,15 @@ export async function findInvoiceById(
   }
 }
 
+export async function ensureInvoiceExists(
+  supabase: SupabaseClient<Database>,
+  id: string
+): Promise<InvoiceDetail> {
+  const invoice = await findInvoiceById(supabase, id)
+  if (!invoice) throw notFound('Invoice not found')
+  return invoice
+}
+
 export async function createInvoice(
   supabase: SupabaseClient<Database>,
   data: NewInvoiceValues,
@@ -137,16 +147,19 @@ export async function createInvoice(
   const { data: invoice, error: invoiceError } = await supabase
     .from('invoices')
     .insert({
-      customer_id: invoiceData.customer_id,
-      order_id: invoiceData.order_id ?? null,
-      tax: invoiceData.tax,
-      status: invoiceData.status,
-      issue_date: invoiceData.issue_date,
-      due_date: invoiceData.due_date || null,
-      paid_at: null,
-      notes: invoiceData.notes || null,
-      created_by: userId,
-      subtotal: 0,
+      customer_id:          invoiceData.customer_id,
+      order_id:             invoiceData.order_id ?? null,
+      tax:                  invoiceData.tax,
+      status:               invoiceData.status,
+      issue_date:           invoiceData.issue_date,
+      due_date:             invoiceData.due_date || null,
+      paid_at:              null,
+      notes:                invoiceData.notes || null,
+      created_by:           userId,
+      subtotal:             0,
+      deleted_at:           null,
+      line_items_snapshot:  null,
+      pdf_s3_key:           null,
     })
     .select('id')
     .single()
@@ -178,9 +191,16 @@ export async function updateInvoice(
   id: string,
   patch: UpdateInvoiceValues
 ): Promise<InvoiceRow> {
+  const invoicePatch: UpdateInvoiceValues = { ...patch }
+  if (patch.status === 'paid') {
+    invoicePatch.paid_at = patch.paid_at ?? new Date().toISOString()
+  } else if (patch.status) {
+    invoicePatch.paid_at = null
+  }
+
   const { data, error } = await supabase
     .from('invoices')
-    .update(patch)
+    .update(invoicePatch)
     .eq('id', id)
     .select(INVOICE_LIST_SELECT)
     .single()
@@ -194,6 +214,11 @@ export async function deleteInvoice(
   supabase: SupabaseClient<Database>,
   id: string
 ): Promise<void> {
+  const invoice = await ensureInvoiceExists(supabase, id)
+  if (invoice.status !== 'draft') {
+    throw conflict('Only draft invoices can be deleted')
+  }
+
   const { error } = await supabase
     .from('invoices')
     .delete()

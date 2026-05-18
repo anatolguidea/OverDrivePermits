@@ -1,10 +1,29 @@
 'use client'
 import { useState, useRef } from 'react'
+import { csrfFetch } from '@/lib/http/client'
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import {
   Upload,
   FileText,
   ExternalLink,
   ChevronDown,
+  GripVertical,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,6 +31,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { StatusBadge } from '@/components/admin/shared/StatusBadge'
@@ -20,13 +40,14 @@ import type { PermitStatus } from '@/lib/supabase/types'
 
 export interface PermitManagementRow {
   id: string
-  state_code: string
+  jurisdiction: string
   status: PermitStatus
   cost: number | null
   permit_number: string | null
   document_url: string | null
   submitted_at: string | null
   issue_date: string | null
+  sort_order: number
 }
 
 interface PermitManagementProps {
@@ -35,10 +56,27 @@ interface PermitManagementProps {
   documentSignedUrls: Record<string, string>
 }
 
+// Full status transition graph
+const TRANSITIONS: Record<PermitStatus, { label: string; to: PermitStatus }[]> = {
+  pending:     [{ label: 'Mark In Progress', to: 'in_progress' }, { label: 'Mark Not Needed', to: 'not_needed' }],
+  in_progress: [{ label: 'Mark Submitted',   to: 'submitted'   }, { label: 'Mark Rejected',   to: 'rejected'   }, { label: 'Revert Pending', to: 'pending' }],
+  submitted:   [{ label: 'Mark Issued',      to: 'issued'      }, { label: 'Mark Rejected',   to: 'rejected'   }, { label: 'Revert Pending', to: 'pending' }],
+  issued:      [{ label: 'Revert Submitted', to: 'submitted'   }],
+  rejected:    [{ label: 'Mark In Progress', to: 'in_progress' }, { label: 'Revert Pending',  to: 'pending'    }],
+  not_needed:  [{ label: 'Revert Pending',   to: 'pending'     }],
+}
+
 export function PermitManagement({ orderId, initialPermits, documentSignedUrls }: PermitManagementProps) {
   const { toast } = useToast()
-  const [permits, setPermits] = useState(initialPermits)
+  const [permits, setPermits] = useState(() =>
+    [...initialPermits].sort((a, b) => a.sort_order - b.sort_order)
+  )
   const [signedUrls, setSignedUrls] = useState(documentSignedUrls)
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  )
 
   function updateLocal(id: string, patch: Partial<PermitManagementRow>) {
     setPermits((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)))
@@ -46,7 +84,7 @@ export function PermitManagement({ orderId, initialPermits, documentSignedUrls }
 
   async function transitionStatus(permit: PermitManagementRow, to: PermitStatus) {
     try {
-      const res = await fetch(`/api/admin/permits/${permit.id}`, {
+      const res = await csrfFetch(`/api/admin/permits/${permit.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: to }),
@@ -54,7 +92,7 @@ export function PermitManagement({ orderId, initialPermits, documentSignedUrls }
       const json = await res.json()
       if (!json.success) throw new Error(json.error)
       updateLocal(permit.id, json.data)
-      toast({ title: `${permit.state_code} marked ${to}` })
+      toast({ title: `${permit.jurisdiction} marked ${to.replace('_', ' ')}` })
     } catch (err) {
       toast({ title: 'Error', description: String(err), variant: 'destructive' })
     }
@@ -62,7 +100,7 @@ export function PermitManagement({ orderId, initialPermits, documentSignedUrls }
 
   async function savePermitNumber(permit: PermitManagementRow, value: string) {
     try {
-      const res = await fetch(`/api/admin/permits/${permit.id}`, {
+      const res = await csrfFetch(`/api/admin/permits/${permit.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ permit_number: value }),
@@ -75,26 +113,52 @@ export function PermitManagement({ orderId, initialPermits, documentSignedUrls }
     }
   }
 
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+
+    const oldIndex = permits.findIndex((p) => p.id === active.id)
+    const newIndex = permits.findIndex((p) => p.id === over.id)
+    const reordered = arrayMove(permits, oldIndex, newIndex).map((p, i) => ({ ...p, sort_order: i }))
+    setPermits(reordered)
+
+    try {
+      await csrfFetch(`/api/admin/orders/${orderId}/permits/reorder`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order: reordered.map((p) => p.id) }),
+      })
+    } catch {
+      // revert on failure
+      setPermits(permits)
+      toast({ title: 'Reorder failed', variant: 'destructive' })
+    }
+  }
+
   return (
-    <div className="space-y-2">
-      {permits.map((permit) => (
-        <PermitRow
-          key={permit.id}
-          permit={permit}
-          signedUrl={signedUrls[permit.id]}
-          onTransition={transitionStatus}
-          onSaveNumber={savePermitNumber}
-          onUploaded={(updated, url) => {
-            updateLocal(updated.id, updated)
-            if (url) setSignedUrls((prev) => ({ ...prev, [updated.id]: url }))
-          }}
-        />
-      ))}
-    </div>
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+      <SortableContext items={permits.map((p) => p.id)} strategy={verticalListSortingStrategy}>
+        <div className="space-y-2">
+          {permits.map((permit) => (
+            <SortablePermitRow
+              key={permit.id}
+              permit={permit}
+              signedUrl={signedUrls[permit.id]}
+              onTransition={transitionStatus}
+              onSaveNumber={savePermitNumber}
+              onUploaded={(updated, url) => {
+                updateLocal(updated.id, updated)
+                if (url) setSignedUrls((prev) => ({ ...prev, [updated.id]: url }))
+              }}
+            />
+          ))}
+        </div>
+      </SortableContext>
+    </DndContext>
   )
 }
 
-// ─── Single permit row ───────────────────────────────────────────────────────
+// ─── Sortable permit row ─────────────────────────────────────────────────────
 
 interface PermitRowProps {
   permit: PermitManagementRow
@@ -104,7 +168,32 @@ interface PermitRowProps {
   onUploaded: (updated: PermitManagementRow, signedUrl?: string) => void
 }
 
-function PermitRow({ permit, signedUrl, onTransition, onSaveNumber, onUploaded }: PermitRowProps) {
+function SortablePermitRow(props: PermitRowProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: props.permit.id,
+  })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  }
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <PermitRow {...props} dragHandleProps={{ ...attributes, ...listeners }} />
+    </div>
+  )
+}
+
+function PermitRow({
+  permit,
+  signedUrl,
+  onTransition,
+  onSaveNumber,
+  onUploaded,
+  dragHandleProps,
+}: PermitRowProps & { dragHandleProps?: React.HTMLAttributes<HTMLButtonElement> }) {
   const { toast } = useToast()
   const [transitioning, setTransitioning] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -122,16 +211,15 @@ function PermitRow({ permit, signedUrl, onTransition, onSaveNumber, onUploaded }
     try {
       const fd = new FormData()
       fd.append('file', file)
-      const res = await fetch(`/api/admin/permits/${permit.id}/upload`, { method: 'POST', body: fd })
+      const res = await csrfFetch(`/api/admin/permits/${permit.id}/upload`, { method: 'POST', body: fd })
       const json = await res.json()
       if (!json.success) throw new Error(json.error)
 
-      // Fetch a fresh signed URL for the newly uploaded doc
       const urlRes = await fetch(`/api/admin/permits/${permit.id}/signed-url`)
       const urlJson = urlRes.ok ? await urlRes.json() : null
 
       onUploaded(json.data, urlJson?.signedUrl)
-      toast({ title: `Document uploaded for ${permit.state_code}` })
+      toast({ title: `Document uploaded for ${permit.jurisdiction}` })
     } catch (err) {
       toast({ title: 'Upload failed', description: String(err), variant: 'destructive' })
     } finally {
@@ -139,18 +227,23 @@ function PermitRow({ permit, signedUrl, onTransition, onSaveNumber, onUploaded }
     }
   }
 
-  const transitionOptions: { label: string; to: PermitStatus }[] = []
-  if (permit.status === 'pending')   transitionOptions.push({ label: 'Mark Submitted', to: 'submitted' })
-  if (permit.status === 'submitted') transitionOptions.push(
-    { label: 'Mark Issued',    to: 'issued'    },
-    { label: 'Revert Pending', to: 'pending'   }
-  )
+  const transitionOptions = TRANSITIONS[permit.status] ?? []
 
   return (
-    <div className="grid grid-cols-[64px_120px_180px_140px_auto] items-center gap-3 rounded-lg border border-border bg-card px-4 py-3">
-      {/* State */}
+    <div className="grid grid-cols-[24px_64px_120px_180px_140px_auto] items-center gap-3 rounded-lg border border-border bg-card px-4 py-3">
+      {/* Drag handle */}
+      <button
+        type="button"
+        className="cursor-grab text-muted-foreground hover:text-foreground focus:outline-none"
+        aria-label="Drag to reorder"
+        {...dragHandleProps}
+      >
+        <GripVertical className="h-4 w-4" />
+      </button>
+
+      {/* Jurisdiction */}
       <span className="inline-flex items-center justify-center rounded-md bg-slate-100 px-2 py-1 font-mono text-sm font-bold text-slate-700">
-        {permit.state_code}
+        {permit.jurisdiction}
       </span>
 
       {/* Status */}
@@ -228,11 +321,16 @@ function PermitRow({ permit, signedUrl, onTransition, onSaveNumber, onUploaded }
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              {transitionOptions.map(({ label, to }) => (
-                <DropdownMenuItem key={to} onSelect={() => handleTransition(to)}>
-                  {label}
-                </DropdownMenuItem>
-              ))}
+              {transitionOptions.flatMap(({ label, to }, i) => {
+                const item = (
+                  <DropdownMenuItem key={to} onSelect={() => handleTransition(to)}>
+                    {label}
+                  </DropdownMenuItem>
+                )
+                return i > 0 && to === 'pending'
+                  ? [<DropdownMenuSeparator key={`sep-${i}`} />, item]
+                  : [item]
+              })}
             </DropdownMenuContent>
           </DropdownMenu>
         )}

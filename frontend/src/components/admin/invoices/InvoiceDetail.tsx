@@ -1,7 +1,9 @@
 'use client'
 import { useState } from 'react'
+import { csrfFetch } from '@/lib/http/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { StatusBadge } from '@/components/admin/shared/StatusBadge'
 import { ConfirmDialog } from '@/components/admin/shared/ConfirmDialog'
@@ -26,7 +28,7 @@ export function InvoiceDetail({ invoice: initialInvoice }: InvoiceDetailProps) {
       if (status === 'paid') {
         body.paid_at = new Date().toISOString()
       }
-      const res = await fetch(`/api/admin/invoices/${invoice.id}`, {
+      const res = await csrfFetch(`/api/admin/invoices/${invoice.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -46,7 +48,7 @@ export function InvoiceDetail({ invoice: initialInvoice }: InvoiceDetailProps) {
   async function handleDelete() {
     setLoading(true)
     try {
-      const res = await fetch(`/api/admin/invoices/${invoice.id}`, { method: 'DELETE' })
+      const res = await csrfFetch(`/api/admin/invoices/${invoice.id}`, { method: 'DELETE' })
       if (!res.ok && res.status !== 204) {
         const json = await res.json()
         throw new Error(json.error)
@@ -59,13 +61,34 @@ export function InvoiceDetail({ invoice: initialInvoice }: InvoiceDetailProps) {
     }
   }
 
+  async function sendInvoice() {
+    setLoading(true)
+    try {
+      const res = await csrfFetch(`/api/admin/invoices/${invoice.id}/send`, { method: 'POST' })
+      const json = await res.json()
+      if (!json.success) throw new Error(String(json.error))
+      if (json.data?.invoice) {
+        setInvoice((prev) => ({ ...prev, ...json.data.invoice }))
+      }
+      toast({
+        title: 'Invoice sent',
+        description: `Sent to ${json.data?.sent_to ?? 'customer billing email'}`,
+      })
+      router.refresh()
+    } catch (err) {
+      toast({ title: 'Error', description: String(err), variant: 'destructive' })
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between">
+    <div className="space-y-5">
+      <div className="admin-page-header">
         <div className="space-y-1">
+          <p className="admin-section-label">Invoice</p>
           <div className="flex items-center gap-3">
-            <h3 className="text-xl font-bold font-mono">{invoice.invoice_number}</h3>
+            <h1 className="text-[24px] font-semibold admin-mono tracking-[-0.03em] text-slate-950">{invoice.invoice_number}</h1>
             <StatusBadge status={invoice.status} />
           </div>
           <p className="text-sm text-muted-foreground">
@@ -84,8 +107,23 @@ export function InvoiceDetail({ invoice: initialInvoice }: InvoiceDetailProps) {
           )}
         </div>
 
-        {/* Action buttons */}
         <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" asChild>
+            <a href={`/api/admin/invoices/${invoice.id}/pdf`} target="_blank" rel="noreferrer">
+              <Download className="mr-1.5 h-3.5 w-3.5" />
+              PDF
+            </a>
+          </Button>
+          {(invoice.status === 'draft' || invoice.status === 'sent' || invoice.status === 'overdue') && (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={loading}
+              onClick={sendInvoice}
+            >
+              Send Invoice
+            </Button>
+          )}
           {invoice.status === 'draft' && (
             <Button
               size="sm"
@@ -116,8 +154,7 @@ export function InvoiceDetail({ invoice: initialInvoice }: InvoiceDetailProps) {
         </div>
       </div>
 
-      {/* Date info */}
-      <div className="grid grid-cols-3 gap-4 rounded-lg border border-border bg-muted/20 p-4 text-sm">
+      <div className="grid grid-cols-3 gap-4 admin-panel p-4 text-sm">
         <div>
           <p className="text-xs text-muted-foreground">Issue Date</p>
           <p className="mt-0.5 font-medium">{invoice.issue_date}</p>
@@ -136,26 +173,25 @@ export function InvoiceDetail({ invoice: initialInvoice }: InvoiceDetailProps) {
         </div>
       </div>
 
-      {/* Line items */}
-      <div className="rounded-lg border border-border overflow-hidden">
+      <div className="admin-table-wrap">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-border bg-muted/40">
-              <th className="px-4 py-3 text-left font-medium text-muted-foreground">Description</th>
-              <th className="px-4 py-3 text-right font-medium text-muted-foreground w-24">Qty</th>
-              <th className="px-4 py-3 text-right font-medium text-muted-foreground w-32">Unit Price</th>
-              <th className="px-4 py-3 text-right font-medium text-muted-foreground w-32">Subtotal</th>
+            <tr className="border-b border-slate-200 bg-slate-50">
+              <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">Description</th>
+              <th className="px-4 py-3 text-right text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500 w-24">Qty</th>
+              <th className="px-4 py-3 text-right text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500 w-32">Unit Price</th>
+              <th className="px-4 py-3 text-right text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500 w-32">Subtotal</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-border">
+          <tbody className="divide-y divide-slate-200">
             {invoice.invoice_line_items.map((item) => (
               <tr key={item.id}>
                 <td className="px-4 py-3">{item.description}</td>
-                <td className="px-4 py-3 text-right font-mono">{item.quantity}</td>
-                <td className="px-4 py-3 text-right font-mono">
+                <td className="px-4 py-3 text-right admin-mono">{item.quantity}</td>
+                <td className="px-4 py-3 text-right admin-mono">
                   ${item.unit_price.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                 </td>
-                <td className="px-4 py-3 text-right font-mono">
+                <td className="px-4 py-3 text-right admin-mono">
                   ${item.subtotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                 </td>
               </tr>
@@ -164,24 +200,23 @@ export function InvoiceDetail({ invoice: initialInvoice }: InvoiceDetailProps) {
         </table>
       </div>
 
-      {/* Totals */}
       <div className="flex justify-end">
-        <div className="w-64 space-y-1 rounded-lg border border-border bg-muted/20 p-4 text-sm">
+        <div className="w-64 space-y-1 admin-panel p-4 text-sm">
           <div className="flex justify-between text-muted-foreground">
             <span>Subtotal</span>
-            <span className="font-mono">
+            <span className="admin-mono">
               ${invoice.subtotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
             </span>
           </div>
           <div className="flex justify-between text-muted-foreground">
             <span>Tax</span>
-            <span className="font-mono">
+            <span className="admin-mono">
               ${invoice.tax.toLocaleString('en-US', { minimumFractionDigits: 2 })}
             </span>
           </div>
           <div className="flex justify-between border-t border-border pt-1 font-bold">
             <span>Total</span>
-            <span className="font-mono">
+            <span className="admin-mono">
               ${invoice.total_amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
             </span>
           </div>
@@ -199,10 +234,9 @@ export function InvoiceDetail({ invoice: initialInvoice }: InvoiceDetailProps) {
         onConfirm={handleDelete}
       />
 
-      {/* Notes */}
       {invoice.notes && (
-        <div className="rounded-lg border border-border bg-muted/20 p-4">
-          <p className="text-xs font-medium text-muted-foreground mb-1">Notes</p>
+        <div className="admin-panel p-4">
+          <p className="mb-1 admin-section-label">Notes</p>
           <p className="text-sm whitespace-pre-wrap">{invoice.notes}</p>
         </div>
       )}

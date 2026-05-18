@@ -1,6 +1,7 @@
 import 'server-only'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/types'
+import { conflict, notFound } from '@/lib/errors'
 
 export type CustomerRow = Database['public']['Tables']['customers']['Row']
 export type CustomerInsert = Omit<CustomerRow, 'id' | 'created_at' | 'updated_at'>
@@ -82,6 +83,15 @@ export async function findCustomerById(
   return data
 }
 
+export async function ensureCustomerExists(
+  supabase: SupabaseClient<Database>,
+  id: string
+): Promise<CustomerRow> {
+  const customer = await findCustomerById(supabase, id)
+  if (!customer) throw notFound('Customer not found')
+  return customer
+}
+
 export async function createCustomer(
   supabase: SupabaseClient<Database>,
   values: CustomerInsert
@@ -116,6 +126,19 @@ export async function deleteCustomer(
   supabase: SupabaseClient<Database>,
   id: string
 ): Promise<void> {
+  const [{ count: ordersCount, error: ordersError }, { count: invoicesCount, error: invoicesError }] =
+    await Promise.all([
+      supabase.from('orders').select('*', { count: 'exact', head: true }).eq('customer_id', id),
+      supabase.from('invoices').select('*', { count: 'exact', head: true }).eq('customer_id', id),
+    ])
+
+  if (ordersError) throw new Error(`customers.delete.ordersCount: ${ordersError.message}`)
+  if (invoicesError) throw new Error(`customers.delete.invoicesCount: ${invoicesError.message}`)
+
+  if ((ordersCount ?? 0) > 0 || (invoicesCount ?? 0) > 0) {
+    throw conflict('Cannot delete a customer with existing orders or invoices')
+  }
+
   const { error } = await supabase.from('customers').delete().eq('id', id)
   if (error) throw new Error(`customers.deleteCustomer: ${error.message}`)
 }

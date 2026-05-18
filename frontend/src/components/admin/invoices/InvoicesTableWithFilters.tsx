@@ -28,7 +28,9 @@ const STATUSES: { value: InvoiceStatus | 'all'; label: string }[] = [
   { value: 'all',   label: 'All Statuses' },
   { value: 'draft', label: 'Draft' },
   { value: 'sent',  label: 'Sent' },
+  { value: 'overdue', label: 'Overdue' },
   { value: 'paid',  label: 'Paid' },
+  { value: 'void', label: 'Void' },
 ]
 
 export function InvoicesTableWithFilters() {
@@ -76,7 +78,7 @@ export function InvoicesTableWithFilters() {
 
   if (isLoading) {
     return (
-      <div className="space-y-2 rounded-md border border-border p-4">
+      <div className="space-y-2 admin-table-wrap p-4">
         {Array.from({ length: 6 }).map((_, i) => (
           <Skeleton key={i} className="h-10 w-full" />
         ))}
@@ -86,8 +88,7 @@ export function InvoicesTableWithFilters() {
 
   return (
     <div className="space-y-3">
-      {/* Filter bar */}
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="admin-toolbar">
         <div className="relative w-52">
           <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -144,23 +145,23 @@ export function InvoicesTableWithFilters() {
           }
         />
       ) : (
-        <div className={`rounded-lg border border-border bg-card overflow-hidden ${isFetching ? 'opacity-70 transition-opacity' : ''}`}>
+        <div className={`admin-table-wrap ${isFetching ? 'opacity-70 transition-opacity' : ''}`}>
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-border bg-muted/40">
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Invoice #</th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Customer</th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Order</th>
-                <th className="px-4 py-3 text-right font-medium text-muted-foreground">Total</th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Status</th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Date</th>
+              <tr className="border-b border-slate-200 bg-slate-50">
+                <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">Invoice #</th>
+                <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">Customer</th>
+                <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">Order</th>
+                <th className="px-4 py-3 text-right text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">Total</th>
+                <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">Status</th>
+                <th className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">Date</th>
                 <th className="px-4 py-3 w-20" />
               </tr>
             </thead>
-            <tbody className="divide-y divide-border">
+            <tbody className="divide-y divide-slate-200">
               {invoices.map((invoice) => (
-                <tr key={invoice.id} className="hover:bg-muted/20 transition-colors group">
-                  <td className="px-4 py-3 font-mono text-xs font-medium text-primary">
+                <tr key={invoice.id} className="group transition-colors hover:bg-slate-50/70">
+                  <td className="px-4 py-3 admin-mono text-xs font-medium text-primary">
                     <Link href={`/admin/invoices/${invoice.id}`} className="hover:underline">
                       {invoice.invoice_number}
                     </Link>
@@ -168,7 +169,7 @@ export function InvoicesTableWithFilters() {
                   <td className="px-4 py-3">
                     {invoice.customers?.name ?? <span className="text-muted-foreground">—</span>}
                   </td>
-                  <td className="px-4 py-3 font-mono text-xs">
+                  <td className="px-4 py-3 admin-mono text-xs">
                     {invoice.orders ? (
                       <Link
                         href={`/admin/orders/${invoice.order_id}`}
@@ -180,7 +181,7 @@ export function InvoicesTableWithFilters() {
                       <span className="text-muted-foreground">—</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-right font-mono">
+                  <td className="px-4 py-3 text-right admin-mono">
                     ${invoice.total_amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                   </td>
                   <td className="px-4 py-3">

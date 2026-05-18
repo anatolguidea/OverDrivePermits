@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { csrfFetch } from '@/lib/http/client'
 import { useRouter } from 'next/navigation'
 import { useForm, useFieldArray } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -79,7 +80,7 @@ export function InvoiceForm({ customers, orders = [], initialCustomerId, initial
   async function onSubmit(values: NewInvoiceValues) {
     setSubmitting(true)
     try {
-      const res = await fetch('/api/admin/invoices', {
+      const res = await csrfFetch('/api/admin/invoices', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(values),

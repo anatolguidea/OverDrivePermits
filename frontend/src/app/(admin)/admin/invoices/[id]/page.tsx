@@ -21,7 +21,7 @@ export default async function InvoicePage({ params }: InvoicePageProps) {
   if (!invoice) notFound()
 
   return (
-    <div className="max-w-3xl space-y-6">
+    <div className="space-y-5">
       <Button variant="ghost" size="sm" asChild className="-ml-2">
         <Link href="/admin/invoices">
           <ArrowLeft className="mr-1.5 h-4 w-4" /> Invoices

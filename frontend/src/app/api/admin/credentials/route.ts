@@ -1,50 +1,54 @@
-import { NextResponse, type NextRequest } from 'next/server'
+import type { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { findCredentialsByCustomer, createCredential } from '@/lib/repositories/credentials.repo'
+import { ensureCustomerExists } from '@/lib/repositories/customers.repo'
+import { logAdminAction } from '@/lib/repositories/admin-audit.repo'
 import { credentialSchema } from '@/lib/validators/credential.schema'
-import { assertAdmin } from '@/lib/auth/assertAdmin'
-import { getErrorMessage } from '@/lib/errors'
+import { requireAdmin } from '@/lib/auth/assertAdmin'
+import { apiCreated, apiSuccess, handleApiError, parseWithSchema } from '@/lib/http/admin'
+import { customerScopedQuerySchema } from '@/lib/validators/admin-api.schema'
 
 export async function GET(request: NextRequest) {
   const supabase = await createClient()
-  if (!(await assertAdmin(supabase))) {
-    return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
-  }
-
-  const customer_id = request.nextUrl.searchParams.get('customer_id')
-  if (!customer_id) {
-    return NextResponse.json({ success: false, error: 'customer_id required' }, { status: 400 })
-  }
-
   try {
+    await requireAdmin(supabase)
+    const { customer_id } = parseWithSchema(
+      customerScopedQuerySchema,
+      Object.fromEntries(request.nextUrl.searchParams)
+    )
     const data = await findCredentialsByCustomer(supabase, customer_id)
-    return NextResponse.json({ success: true, data })
+    return apiSuccess(data)
   } catch (err) {
-    return NextResponse.json({ success: false, error: getErrorMessage(err) }, { status: 500 })
+    return handleApiError(err)
   }
 }
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
-  if (!(await assertAdmin(supabase))) {
-    return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
-  }
-
-  const body = await request.json()
-  const { customer_id, ...rest } = body
-  if (!customer_id) {
-    return NextResponse.json({ success: false, error: 'customer_id required' }, { status: 400 })
-  }
-
-  const parsed = credentialSchema.safeParse(rest)
-  if (!parsed.success) {
-    return NextResponse.json({ success: false, error: parsed.error.flatten() }, { status: 422 })
-  }
-
   try {
-    const data = await createCredential(supabase, { customer_id, ...parsed.data })
-    return NextResponse.json({ success: true, data }, { status: 201 })
+    const { user, role } = await requireAdmin(supabase, ['owner', 'admin'])
+    const body = await request.json()
+    const { customer_id, ...rest } = body
+    const scoped = parseWithSchema(customerScopedQuerySchema, { customer_id })
+    await ensureCustomerExists(supabase, scoped.customer_id)
+    const parsed = parseWithSchema(credentialSchema, rest)
+    const data = await createCredential(supabase, {
+      customer_id:  scoped.customer_id,
+      jurisdiction: parsed.jurisdiction.trim(),
+      username:     parsed.username.trim(),
+      password:     parsed.password,
+      notes:        parsed.notes?.trim() || null,
+    })
+    await logAdminAction(supabase, {
+      actor_user_id: user.id,
+      actor_role:    role,
+      action:        'credential.create',
+      target_table:  'customer_credentials',
+      target_id:     data.id,
+      metadata:      { customer_id: data.customer_id, jurisdiction: data.jurisdiction, username: data.username },
+    })
+    return apiCreated(data)
   } catch (err) {
-    return NextResponse.json({ success: false, error: getErrorMessage(err) }, { status: 500 })
+    return handleApiError(err)
   }
 }

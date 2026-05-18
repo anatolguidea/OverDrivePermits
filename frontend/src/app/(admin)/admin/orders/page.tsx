@@ -3,11 +3,12 @@ import { Plus } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { findOrders } from '@/lib/repositories/orders.repo'
 import { HydrationBoundary, QueryClient, dehydrate } from '@tanstack/react-query'
-import { ordersQueryKey } from '@/lib/queries/useOrders'
+import { ordersQueryKey } from '@/lib/queries/orderKeys'
 import { OrdersTableWithFilters } from '@/components/admin/orders/OrdersTableWithFilters'
 import { Button } from '@/components/ui/button'
 
 export const metadata = { title: 'Orders — OSW Permits Admin' }
+export const dynamic = 'force-dynamic'
 
 export default async function OrdersPage() {
   const supabase = await createClient()
@@ -19,11 +20,12 @@ export default async function OrdersPage() {
   })
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="space-y-5">
+      <div className="admin-page-header">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Orders</h2>
-          <p className="text-sm text-muted-foreground">All permit orders</p>
+          <p className="admin-section-label">Orders</p>
+          <h1 className="admin-page-title">Permit order queue</h1>
+          <p className="admin-page-meta">Dense queue view with route order, permit strip, and quick actions.</p>
         </div>
         <Button asChild size="sm">
           <Link href="/admin/orders/new">

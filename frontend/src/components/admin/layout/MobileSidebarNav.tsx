@@ -6,7 +6,7 @@ import {
   FileText,
   Users,
   Receipt,
-  BarChart3,
+  Settings,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -15,7 +15,7 @@ const nav = [
   { label: 'Orders',    href: '/admin/orders',    icon: FileText },
   { label: 'Customers', href: '/admin/customers', icon: Users },
   { label: 'Invoices',  href: '/admin/invoices',  icon: Receipt },
-  { label: 'Reports',   href: '/admin/reports',   icon: BarChart3 },
+  { label: 'Settings',  href: '/admin/settings',  icon: Settings },
 ]
 
 export function MobileSidebarNav() {
@@ -34,15 +34,16 @@ export function MobileSidebarNav() {
             <li key={href}>
               <Link
                 href={href}
+                data-active={active}
                 className={cn(
-                  'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                  'admin-nav-link',
                   active
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+                    ? 'border-slate-300 bg-white text-slate-950'
+                    : 'text-slate-600 hover:border-slate-200 hover:bg-white hover:text-slate-950'
                 )}
               >
-                <Icon className="h-4 w-4 shrink-0" />
-                {label}
+                <Icon className={cn('relative z-[1] h-4 w-4 shrink-0', active ? 'text-slate-950' : 'text-slate-500')} />
+                <span className="relative z-[1]">{label}</span>
               </Link>
             </li>
           )

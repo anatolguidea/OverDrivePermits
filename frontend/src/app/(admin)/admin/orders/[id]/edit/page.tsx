@@ -3,7 +3,8 @@ import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { findOrderById } from '@/lib/repositories/orders.repo'
-import { findVehiclesByCustomer } from '@/lib/repositories/vehicles.repo'
+import { findTrucksByCustomer } from '@/lib/repositories/trucks.repo'
+import { findTrailersByCustomer } from '@/lib/repositories/trailers.repo'
 import { Button } from '@/components/ui/button'
 import { OrderEditForm } from '@/components/admin/orders/OrderEditForm'
 
@@ -19,7 +20,10 @@ export default async function EditOrderPage({ params }: { params: { id: string }
   const order = await findOrderById(supabase, params.id)
   if (!order) notFound()
 
-  const vehicles = await findVehiclesByCustomer(supabase, order.customers.id)
+  const [trucks, trailers] = await Promise.all([
+    findTrucksByCustomer(supabase, order.customers.id),
+    findTrailersByCustomer(supabase, order.customers.id),
+  ])
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -36,7 +40,7 @@ export default async function EditOrderPage({ params }: { params: { id: string }
         </p>
       </div>
 
-      <OrderEditForm order={order} vehicles={vehicles} />
+      <OrderEditForm order={order} trucks={trucks} trailers={trailers} />
     </div>
   )
 }
