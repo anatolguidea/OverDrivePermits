@@ -1,5 +1,6 @@
 'use client'
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
+import { getApiErrorMessage } from '@/lib/http/client'
 import type { InvoiceFilters, InvoicesPage } from '@/lib/repositories/invoices.repo'
 
 export type { InvoiceFilters, InvoicesPage }
@@ -12,9 +13,11 @@ async function fetchInvoices(filters: InvoiceFilters): Promise<InvoicesPage> {
   if (filters.page) params.set('page', String(filters.page))
   if (filters.page_size) params.set('page_size', String(filters.page_size))
 
-  const res = await fetch(`/api/admin/invoices?${params.toString()}`)
-  if (!res.ok) throw new Error('Failed to fetch invoices')
+  const res = await fetch(`/api/admin/invoices?${params.toString()}`, { cache: 'no-store' })
   const json = await res.json()
+  if (!res.ok || json?.success === false) {
+    throw new Error(getApiErrorMessage(json, 'Failed to fetch invoices'))
+  }
   return { data: json.data ?? [], total: json.total ?? 0, page: json.page ?? 1, page_size: json.page_size ?? 25 }
 }
 

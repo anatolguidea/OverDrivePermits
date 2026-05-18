@@ -3,6 +3,7 @@ import { useForm, type Control } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { customerSchema, type CustomerFormValues } from '@/lib/validators/customer.schema'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -25,7 +26,7 @@ import {
 import { useToast } from '@/hooks/use-toast'
 import { US_STATES } from '@/lib/constants/us-states'
 import type { CustomerRow } from '@/lib/repositories/customers.repo'
-import { csrfFetch } from '@/lib/http/client'
+import { csrfFetch, getThrownMessage, parseApiResponse } from '@/lib/http/client'
 
 interface CustomerFormProps {
   customer?: CustomerRow
@@ -34,6 +35,7 @@ interface CustomerFormProps {
 export function CustomerForm({ customer }: CustomerFormProps) {
   const router = useRouter()
   const { toast } = useToast()
+  const queryClient = useQueryClient()
   const [loading, setLoading] = useState(false)
   const isEdit = !!customer
 
@@ -62,6 +64,7 @@ export function CustomerForm({ customer }: CustomerFormProps) {
   })
 
   async function onSubmit(values: CustomerFormValues) {
+    if (loading) return
     setLoading(true)
     try {
       const url = isEdit ? `/api/admin/customers/${customer!.id}` : '/api/admin/customers'
@@ -75,14 +78,14 @@ export function CustomerForm({ customer }: CustomerFormProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
-      const json = await res.json()
-      if (!json.success) throw new Error(json.error?.toString())
+      const data = await parseApiResponse<{ id: string }>(res, 'Failed to save customer')
 
+      await queryClient.invalidateQueries({ queryKey: ['customer-options'] })
       toast({ title: isEdit ? 'Customer updated' : 'Customer created' })
-      router.push(isEdit ? `/admin/customers/${customer!.id}` : `/admin/customers/${json.data.id}`)
+      router.push(isEdit ? `/admin/customers/${customer!.id}` : `/admin/customers/${data.id}`)
       router.refresh()
     } catch (err) {
-      toast({ title: 'Error', description: String(err), variant: 'destructive' })
+      toast({ title: 'Error', description: getThrownMessage(err), variant: 'destructive' })
     } finally {
       setLoading(false)
     }

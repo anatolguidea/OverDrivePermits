@@ -1,6 +1,8 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
-import { csrfFetch } from '@/lib/http/client'
+import { useQueryClient } from '@tanstack/react-query'
+import { csrfFetch, getThrownMessage, parseApiResponse } from '@/lib/http/client'
+import { invalidateAdminLiveData } from '@/lib/queries/invalidation'
 import { Upload, FileText, ExternalLink, ChevronDown, X } from 'lucide-react'
 import {
   Sheet,
@@ -40,6 +42,7 @@ interface PermitQuickDrawerProps {
 
 export function PermitQuickDrawer({ permit, orderNumber, onClose, onUpdated }: PermitQuickDrawerProps) {
   const { toast } = useToast()
+  const queryClient = useQueryClient()
   const [transitioning, setTransitioning] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [signedUrl, setSignedUrl] = useState<string | null>(null)
@@ -51,8 +54,8 @@ export function PermitQuickDrawer({ permit, orderNumber, onClose, onUpdated }: P
     setPermitNumberDraft(permit.permit_number ?? '')
     if (permit.document_url) {
       fetch(`/api/admin/permits/${permit.id}/signed-url`)
-        .then((r) => r.ok ? r.json() : null)
-        .then((j) => setSignedUrl(j?.signedUrl ?? null))
+        .then((r) => parseApiResponse<{ signedUrl: string }>(r, 'Failed to load document link'))
+        .then((data) => setSignedUrl(data.signedUrl))
         .catch(() => null)
     } else {
       setSignedUrl(null)
@@ -60,7 +63,7 @@ export function PermitQuickDrawer({ permit, orderNumber, onClose, onUpdated }: P
   }, [permit])
 
   async function handleTransition(to: PermitStatus) {
-    if (!permit) return
+    if (!permit || transitioning) return
     setTransitioning(true)
     try {
       const res = await csrfFetch(`/api/admin/permits/${permit.id}`, {
@@ -68,12 +71,12 @@ export function PermitQuickDrawer({ permit, orderNumber, onClose, onUpdated }: P
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: to }),
       })
-      const json = await res.json()
-      if (!json.success) throw new Error(json.error)
+      await parseApiResponse(res, 'Failed to update permit status')
       onUpdated(permit.id, { status: to })
+      await invalidateAdminLiveData(queryClient)
       toast({ title: `${permit.jurisdiction} → ${to.replace('_', ' ')}` })
     } catch (err) {
-      toast({ title: 'Error', description: String(err), variant: 'destructive' })
+      toast({ title: 'Error', description: getThrownMessage(err), variant: 'destructive' })
     } finally {
       setTransitioning(false)
     }
@@ -87,33 +90,35 @@ export function PermitQuickDrawer({ permit, orderNumber, onClose, onUpdated }: P
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ permit_number: permitNumberDraft }),
       })
-      const json = await res.json()
-      if (!json.success) throw new Error(json.error)
+      await parseApiResponse(res, 'Failed to save permit number')
       onUpdated(permit.id, { permit_number: permitNumberDraft || null })
+      await invalidateAdminLiveData(queryClient)
       toast({ title: 'Permit number saved' })
     } catch (err) {
-      toast({ title: 'Error', description: String(err), variant: 'destructive' })
+      toast({ title: 'Error', description: getThrownMessage(err), variant: 'destructive' })
     }
   }
 
   async function handleUpload(file: File) {
-    if (!permit) return
+    if (!permit || uploading) return
     setUploading(true)
     try {
       const fd = new FormData()
       fd.append('file', file)
       const res = await csrfFetch(`/api/admin/permits/${permit.id}/upload`, { method: 'POST', body: fd })
-      const json = await res.json()
-      if (!json.success) throw new Error(json.error)
+      const data = await parseApiResponse<{ document_url: string }>(res, 'Failed to upload document')
 
       const urlRes = await fetch(`/api/admin/permits/${permit.id}/signed-url`)
-      const urlJson = urlRes.ok ? await urlRes.json() : null
+      const urlJson = urlRes.ok
+        ? await parseApiResponse<{ signedUrl: string }>(urlRes, 'Failed to load document link')
+        : null
       const newUrl = urlJson?.signedUrl ?? null
       setSignedUrl(newUrl)
-      onUpdated(permit.id, { document_url: json.data.document_url })
+      onUpdated(permit.id, { document_url: data.document_url })
+      await invalidateAdminLiveData(queryClient)
       toast({ title: `Document uploaded for ${permit.jurisdiction}` })
     } catch (err) {
-      toast({ title: 'Upload failed', description: String(err), variant: 'destructive' })
+      toast({ title: 'Upload failed', description: getThrownMessage(err), variant: 'destructive' })
     } finally {
       setUploading(false)
     }

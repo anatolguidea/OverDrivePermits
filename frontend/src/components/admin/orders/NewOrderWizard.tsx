@@ -1,6 +1,8 @@
 'use client'
 import { useState, useCallback } from 'react'
-import { csrfFetch } from '@/lib/http/client'
+import { useQueryClient } from '@tanstack/react-query'
+import { csrfFetch, getThrownMessage, parseApiResponse } from '@/lib/http/client'
+import { invalidateAdminLiveData } from '@/lib/queries/invalidation'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -48,6 +50,7 @@ export function NewOrderWizard() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { toast } = useToast()
+  const queryClient = useQueryClient()
   const [loading, setLoading] = useState(false)
   const [customerSearch, setCustomerSearch] = useState('')
   const [customerPopoverOpen, setCustomerPopoverOpen] = useState(false)
@@ -107,6 +110,7 @@ export function NewOrderWizard() {
   )
 
   async function onSubmit(values: NewOrderFormValues) {
+    if (loading) return
     setLoading(true)
     try {
       const payload = {
@@ -135,14 +139,14 @@ export function NewOrderWizard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
-      const json = await res.json()
-      if (!json.success) throw new Error(json.error?.toString() ?? 'Failed to create order')
+      const data = await parseApiResponse<{ order_number: string; order_id: string }>(res, 'Failed to create order')
 
-      toast({ title: `Order ${json.data.order_number} created` })
-      router.push(`/admin/orders/${json.data.order_id}`)
+      await invalidateAdminLiveData(queryClient)
+      toast({ title: `Order ${data.order_number} created` })
+      router.push(`/admin/orders/${data.order_id}`)
       router.refresh()
     } catch (err) {
-      toast({ title: 'Error', description: String(err), variant: 'destructive' })
+      toast({ title: 'Error', description: getThrownMessage(err), variant: 'destructive' })
     } finally {
       setLoading(false)
     }

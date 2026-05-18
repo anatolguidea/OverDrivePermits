@@ -1,5 +1,6 @@
 'use client'
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
+import { getApiErrorMessage } from '@/lib/http/client'
 import type { OrderRow, OrderFilters, OrdersPage } from '@/lib/repositories/orders.repo'
 import { ordersQueryKey } from './orderKeys'
 
@@ -16,9 +17,12 @@ async function fetchOrders(filters: OrderFilters): Promise<OrdersPage> {
   if (filters.page)        params.set('page',        String(filters.page))
   if (filters.page_size)   params.set('page_size',   String(filters.page_size))
 
-  const res = await fetch(`/api/admin/orders?${params.toString()}`)
-  if (!res.ok) throw new Error('Failed to fetch orders')
-  return res.json()
+  const res = await fetch(`/api/admin/orders?${params.toString()}`, { cache: 'no-store' })
+  const json = await res.json()
+  if (!res.ok || json?.success === false) {
+    throw new Error(getApiErrorMessage(json, 'Failed to fetch orders'))
+  }
+  return json
 }
 
 export function useOrders(filters: OrderFilters = {}, options?: { enabled?: boolean }) {

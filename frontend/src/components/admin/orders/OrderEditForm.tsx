@@ -1,6 +1,8 @@
 'use client'
 import { useState } from 'react'
-import { csrfFetch } from '@/lib/http/client'
+import { useQueryClient } from '@tanstack/react-query'
+import { csrfFetch, getThrownMessage, parseApiResponse } from '@/lib/http/client'
+import { invalidateAdminLiveData } from '@/lib/queries/invalidation'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -56,6 +58,7 @@ export function OrderEditForm({ order, trucks, trailers }: OrderEditFormProps) {
   const NONE_VALUE = '__none__'
   const router = useRouter()
   const { toast } = useToast()
+  const queryClient = useQueryClient()
   const [loading, setLoading] = useState(false)
   const [dimensionsOpen, setDimensionsOpen] = useState(!!order.dimensions)
 
@@ -75,6 +78,7 @@ export function OrderEditForm({ order, trucks, trailers }: OrderEditFormProps) {
   })
 
   async function onSubmit(values: UpdateOrderValues) {
+    if (loading) return
     setLoading(true)
     try {
       const payload: Record<string, unknown> = {
@@ -94,14 +98,14 @@ export function OrderEditForm({ order, trucks, trailers }: OrderEditFormProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
-      const json = await res.json()
-      if (!json.success) throw new Error(json.error)
+      await parseApiResponse(res, 'Failed to update order')
 
+      await invalidateAdminLiveData(queryClient)
       toast({ title: 'Order updated' })
       router.push(`/admin/orders/${order.id}`)
       router.refresh()
     } catch (err) {
-      toast({ title: 'Error', description: String(err), variant: 'destructive' })
+      toast({ title: 'Error', description: getThrownMessage(err), variant: 'destructive' })
     } finally {
       setLoading(false)
     }

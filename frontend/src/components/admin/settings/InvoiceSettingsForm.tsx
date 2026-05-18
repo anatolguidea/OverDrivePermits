@@ -14,7 +14,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form'
-import { csrfFetch } from '@/lib/http/client'
+import { csrfFetch, getThrownMessage, parseApiResponse } from '@/lib/http/client'
 import { useToast } from '@/hooks/use-toast'
 import {
   invoiceSettingsSchema,
@@ -45,6 +45,7 @@ export function InvoiceSettingsForm({ settings }: InvoiceSettingsFormProps) {
   })
 
   async function onSubmit(values: InvoiceSettingsValues) {
+    if (saving) return
     setSaving(true)
     try {
       const res = await csrfFetch('/api/admin/settings/invoice', {
@@ -52,12 +53,11 @@ export function InvoiceSettingsForm({ settings }: InvoiceSettingsFormProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(values),
       })
-      const json = await res.json()
-      if (!json.success) throw new Error(String(json.error))
+      await parseApiResponse(res, 'Failed to update invoice settings')
       toast({ title: 'Invoice settings updated' })
       router.refresh()
     } catch (err) {
-      toast({ title: 'Error', description: String(err), variant: 'destructive' })
+      toast({ title: 'Error', description: getThrownMessage(err), variant: 'destructive' })
     } finally {
       setSaving(false)
     }

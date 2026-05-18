@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { csrfFetch } from '@/lib/http/client'
+import { assertApiSuccess, csrfFetch, getThrownMessage, parseApiResponse } from '@/lib/http/client'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { KeyRound, Eye, EyeOff, Plus, Trash2 } from 'lucide-react'
@@ -82,11 +82,12 @@ function CredentialManager({ customerId, initialCredentials }: { customerId: str
     setRevealing(id)
     try {
       const res = await fetch(`/api/admin/credentials/${id}/reveal`)
-      const json = await res.json()
-      if (!json.success) throw new Error(json.error)
-      setRevealed((prev) => ({ ...prev, [id]: json.password }))
+      const data = await parseApiResponse<{ password?: string } & Record<string, unknown>>(res, 'Failed to reveal credential')
+      const password = typeof data.password === 'string' ? data.password : ''
+      if (!password) throw new Error('Password was not returned')
+      setRevealed((prev) => ({ ...prev, [id]: password }))
     } catch (err) {
-      toast({ title: 'Error', description: String(err), variant: 'destructive' })
+      toast({ title: 'Error', description: getThrownMessage(err), variant: 'destructive' })
     } finally {
       setRevealing(null)
     }
@@ -97,8 +98,7 @@ function CredentialManager({ customerId, initialCredentials }: { customerId: str
     setDeleteLoading(true)
     try {
       const res = await csrfFetch(`/api/admin/credentials/${deleteTarget.id}`, { method: 'DELETE' })
-      const json = await res.json()
-      if (!json.success) throw new Error(json.error)
+      await assertApiSuccess(res, 'Failed to delete credential')
       setCreds((prev) => prev.filter((c) => c.id !== deleteTarget.id))
       setRevealed((prev) => {
         const next = { ...prev }
@@ -107,7 +107,7 @@ function CredentialManager({ customerId, initialCredentials }: { customerId: str
       })
       toast({ title: 'Credential removed' })
     } catch (err) {
-      toast({ title: 'Error', description: String(err), variant: 'destructive' })
+      toast({ title: 'Error', description: getThrownMessage(err), variant: 'destructive' })
     } finally {
       setDeleteLoading(false)
       setDeleteTarget(null)
@@ -231,6 +231,7 @@ function AddCredentialForm({
   })
 
   async function onSubmit(values: CredentialFormValues) {
+    if (loading) return
     setLoading(true)
     try {
       const res = await csrfFetch('/api/admin/credentials', {
@@ -238,12 +239,11 @@ function AddCredentialForm({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ customer_id: customerId, ...values }),
       })
-      const json = await res.json()
-      if (!json.success) throw new Error(JSON.stringify(json.error))
+      const data = await parseApiResponse<CredentialDisplay>(res, 'Failed to save credential')
       toast({ title: 'Credential saved' })
-      onSaved(json.data)
+      onSaved(data)
     } catch (err) {
-      toast({ title: 'Error', description: String(err), variant: 'destructive' })
+      toast({ title: 'Error', description: getThrownMessage(err), variant: 'destructive' })
     } finally {
       setLoading(false)
     }

@@ -1,9 +1,9 @@
-import { NextResponse, type NextRequest } from 'next/server'
+import type { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { decryptCredential, ensureCredentialExists } from '@/lib/repositories/credentials.repo'
 import { logAdminAction } from '@/lib/repositories/admin-audit.repo'
 import { requireAdmin } from '@/lib/auth/assertAdmin'
-import { handleApiError, parseWithSchema } from '@/lib/http/admin'
+import { apiSuccess, handleApiError, parseWithSchema } from '@/lib/http/admin'
 import { revealCredentialQuerySchema, uuidParamSchema } from '@/lib/validators/admin-api.schema'
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
@@ -29,7 +29,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         reason: reason ?? null,
       },
     })
-    return NextResponse.json({ success: true, password })
+    return apiSuccess({ password })
   } catch (err) {
     return handleApiError(err)
   }

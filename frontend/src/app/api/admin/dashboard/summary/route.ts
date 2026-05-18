@@ -29,6 +29,16 @@ export async function GET() {
       supabase.from('invoices').select('*', { count: 'exact', head: true }).eq('status', 'overdue'),
     ])
 
+    const failedQuery = [
+      activeOrdersRes,
+      awaitingPendingRes,
+      awaitingInProgressRes,
+      issuedTodayRes,
+      overdueInvoicesRes,
+    ].find((result) => result.error)
+
+    if (failedQuery?.error) throw new Error(failedQuery.error.message)
+
     return apiSuccess(
       {
         activeOrders: activeOrdersRes.count ?? 0,
@@ -42,4 +52,3 @@ export async function GET() {
     return handleApiError(err)
   }
 }
-

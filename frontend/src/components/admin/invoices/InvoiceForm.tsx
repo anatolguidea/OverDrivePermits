@@ -1,6 +1,8 @@
 'use client'
 import { useState } from 'react'
-import { csrfFetch } from '@/lib/http/client'
+import { useQueryClient } from '@tanstack/react-query'
+import { csrfFetch, getThrownMessage, parseApiResponse } from '@/lib/http/client'
+import { invalidateAdminLiveData } from '@/lib/queries/invalidation'
 import { useRouter } from 'next/navigation'
 import { useForm, useFieldArray } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -36,6 +38,7 @@ interface InvoiceFormProps {
 export function InvoiceForm({ customers, orders = [], initialCustomerId, initialOrderId }: InvoiceFormProps) {
   const router = useRouter()
   const { toast } = useToast()
+  const queryClient = useQueryClient()
   const [submitting, setSubmitting] = useState(false)
 
   const today = new Date().toISOString().split('T')[0]
@@ -78,6 +81,7 @@ export function InvoiceForm({ customers, orders = [], initialCustomerId, initial
   const runningTotal = lineItemsSubtotal + (Number(watchedTax) || 0)
 
   async function onSubmit(values: NewInvoiceValues) {
+    if (submitting) return
     setSubmitting(true)
     try {
       const res = await csrfFetch('/api/admin/invoices', {
@@ -85,12 +89,12 @@ export function InvoiceForm({ customers, orders = [], initialCustomerId, initial
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(values),
       })
-      const json = await res.json()
-      if (!json.success) throw new Error(typeof json.error === 'string' ? json.error : 'Validation error')
-      toast({ title: `Invoice ${json.data.invoice_number} created` })
-      router.push(`/admin/invoices/${json.data.id}`)
+      const data = await parseApiResponse<{ id: string; invoice_number: string }>(res, 'Failed to create invoice')
+      await invalidateAdminLiveData(queryClient)
+      toast({ title: `Invoice ${data.invoice_number} created` })
+      router.push(`/admin/invoices/${data.id}`)
     } catch (err) {
-      toast({ title: 'Error', description: String(err), variant: 'destructive' })
+      toast({ title: 'Error', description: getThrownMessage(err), variant: 'destructive' })
     } finally {
       setSubmitting(false)
     }

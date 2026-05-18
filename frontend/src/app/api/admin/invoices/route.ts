@@ -8,6 +8,8 @@ import { requireAdmin } from '@/lib/auth/assertAdmin'
 import { apiCreated, apiPage, handleApiError, parseWithSchema } from '@/lib/http/admin'
 import { invoicesListQuerySchema } from '@/lib/validators/admin-api.schema'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: NextRequest) {
   const supabase = await createClient()
   try {
@@ -17,7 +19,7 @@ export async function GET(request: NextRequest) {
       Object.fromEntries(request.nextUrl.searchParams)
     )
     const result = await findInvoices(supabase, filters)
-    return apiPage(result)
+    return apiPage(result, { headers: { 'Cache-Control': 'no-store' } })
   } catch (err) {
     return handleApiError(err)
   }

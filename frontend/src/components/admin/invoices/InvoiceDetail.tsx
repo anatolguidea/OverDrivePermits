@@ -1,6 +1,8 @@
 'use client'
 import { useState } from 'react'
-import { csrfFetch } from '@/lib/http/client'
+import { useQueryClient } from '@tanstack/react-query'
+import { assertApiSuccess, csrfFetch, getThrownMessage, parseApiResponse } from '@/lib/http/client'
+import { invalidateAdminLiveData } from '@/lib/queries/invalidation'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Download } from 'lucide-react'
@@ -17,11 +19,13 @@ interface InvoiceDetailProps {
 export function InvoiceDetail({ invoice: initialInvoice }: InvoiceDetailProps) {
   const router = useRouter()
   const { toast } = useToast()
+  const queryClient = useQueryClient()
   const [invoice, setInvoice] = useState(initialInvoice)
   const [loading, setLoading] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
 
   async function transitionStatus(status: 'sent' | 'paid') {
+    if (loading) return
     setLoading(true)
     try {
       const body: Record<string, string> = { status }
@@ -33,50 +37,50 @@ export function InvoiceDetail({ invoice: initialInvoice }: InvoiceDetailProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })
-      const json = await res.json()
-      if (!json.success) throw new Error(json.error)
-      setInvoice((prev) => ({ ...prev, ...json.data }))
+      const data = await parseApiResponse<Partial<InvoiceDetailType>>(res, 'Failed to update invoice')
+      setInvoice((prev) => ({ ...prev, ...data }))
+      await invalidateAdminLiveData(queryClient)
       toast({ title: `Invoice marked ${status}` })
       router.refresh()
     } catch (err) {
-      toast({ title: 'Error', description: String(err), variant: 'destructive' })
+      toast({ title: 'Error', description: getThrownMessage(err), variant: 'destructive' })
     } finally {
       setLoading(false)
     }
   }
 
   async function handleDelete() {
+    if (loading) return
     setLoading(true)
     try {
       const res = await csrfFetch(`/api/admin/invoices/${invoice.id}`, { method: 'DELETE' })
-      if (!res.ok && res.status !== 204) {
-        const json = await res.json()
-        throw new Error(json.error)
-      }
+      await assertApiSuccess(res, 'Failed to delete invoice')
+      await invalidateAdminLiveData(queryClient)
       toast({ title: 'Invoice deleted' })
       router.push('/admin/invoices')
     } catch (err) {
-      toast({ title: 'Error', description: String(err), variant: 'destructive' })
+      toast({ title: 'Error', description: getThrownMessage(err), variant: 'destructive' })
       setLoading(false)
     }
   }
 
   async function sendInvoice() {
+    if (loading) return
     setLoading(true)
     try {
       const res = await csrfFetch(`/api/admin/invoices/${invoice.id}/send`, { method: 'POST' })
-      const json = await res.json()
-      if (!json.success) throw new Error(String(json.error))
-      if (json.data?.invoice) {
-        setInvoice((prev) => ({ ...prev, ...json.data.invoice }))
+      const data = await parseApiResponse<{ invoice?: Partial<InvoiceDetailType>; sent_to?: string }>(res, 'Failed to send invoice')
+      if (data.invoice) {
+        setInvoice((prev) => ({ ...prev, ...data.invoice }))
       }
+      await invalidateAdminLiveData(queryClient)
       toast({
         title: 'Invoice sent',
-        description: `Sent to ${json.data?.sent_to ?? 'customer billing email'}`,
+        description: `Sent to ${data.sent_to ?? 'customer billing email'}`,
       })
       router.refresh()
     } catch (err) {
-      toast({ title: 'Error', description: String(err), variant: 'destructive' })
+      toast({ title: 'Error', description: getThrownMessage(err), variant: 'destructive' })
     } finally {
       setLoading(false)
     }

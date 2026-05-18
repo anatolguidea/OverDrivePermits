@@ -1,5 +1,6 @@
 'use client'
 import { useQuery } from '@tanstack/react-query'
+import { getApiErrorMessage } from '@/lib/http/client'
 
 export interface CustomerOption {
   id: string
@@ -11,9 +12,11 @@ async function fetchCustomerOptions(search?: string): Promise<CustomerOption[]> 
   const params = new URLSearchParams()
   if (search) params.set('search', search)
   params.set('page_size', '50')
-  const res = await fetch(`/api/admin/customers?${params}`)
-  if (!res.ok) throw new Error('Failed to fetch customers')
+  const res = await fetch(`/api/admin/customers?${params}`, { cache: 'no-store' })
   const json = await res.json()
+  if (!res.ok || json?.success === false) {
+    throw new Error(getApiErrorMessage(json, 'Failed to fetch customers'))
+  }
   return json.data ?? []
 }
 
@@ -40,16 +43,20 @@ export interface TrailerOption {
 }
 
 async function fetchTrucksForCustomer(customerId: string): Promise<TruckOption[]> {
-  const res = await fetch(`/api/admin/trucks?customer_id=${customerId}`)
-  if (!res.ok) throw new Error('Failed to fetch trucks')
+  const res = await fetch(`/api/admin/trucks?customer_id=${customerId}`, { cache: 'no-store' })
   const json = await res.json()
+  if (!res.ok || json?.success === false) {
+    throw new Error(getApiErrorMessage(json, 'Failed to fetch trucks'))
+  }
   return json.data ?? []
 }
 
 async function fetchTrailersForCustomer(customerId: string): Promise<TrailerOption[]> {
-  const res = await fetch(`/api/admin/trailers?customer_id=${customerId}`)
-  if (!res.ok) throw new Error('Failed to fetch trailers')
+  const res = await fetch(`/api/admin/trailers?customer_id=${customerId}`, { cache: 'no-store' })
   const json = await res.json()
+  if (!res.ok || json?.success === false) {
+    throw new Error(getApiErrorMessage(json, 'Failed to fetch trailers'))
+  }
   return json.data ?? []
 }
 

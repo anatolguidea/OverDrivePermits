@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -41,7 +42,7 @@ import { Badge } from '@/components/ui/badge'
 import { ConfirmDialog } from '@/components/admin/shared/ConfirmDialog'
 import { EmptyState } from '@/components/admin/shared/EmptyState'
 import { useToast } from '@/hooks/use-toast'
-import { csrfFetch } from '@/lib/http/client'
+import { assertApiSuccess, csrfFetch, getThrownMessage, parseApiResponse } from '@/lib/http/client'
 import { US_STATES } from '@/lib/constants/us-states'
 
 // ---- Types ----------------------------------------------------------------
@@ -133,6 +134,7 @@ interface FleetTableProps {
 
 export function FleetTable({ customerId, initialTrucks, initialTrailers }: FleetTableProps) {
   const { toast } = useToast()
+  const queryClient = useQueryClient()
   const [fleet, setFleet] = useState<FleetEntry[]>(() => mergeSorted(initialTrucks, initialTrailers))
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editTarget, setEditTarget] = useState<FleetEntry | null>(null)
@@ -163,14 +165,15 @@ export function FleetTable({ customerId, initialTrucks, initialTrailers }: Fleet
       : `/api/admin/trailers/${deleteTarget.id}`
     try {
       const res = await csrfFetch(url, { method: 'DELETE' })
-      if (!res.ok) {
-        const json = await res.json().catch(() => ({}))
-        throw new Error(json.error ?? res.statusText)
-      }
+      await assertApiSuccess(res, 'Failed to delete vehicle')
       setFleet((prev) => prev.filter((e) => e.id !== deleteTarget.id))
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['trucks', customerId] }),
+        queryClient.invalidateQueries({ queryKey: ['trailers', customerId] }),
+      ])
       toast({ title: `${deleteTarget._type === 'truck' ? 'Truck' : 'Trailer'} removed` })
     } catch (err) {
-      toast({ title: 'Error', description: String(err), variant: 'destructive' })
+      toast({ title: 'Error', description: getThrownMessage(err), variant: 'destructive' })
     } finally {
       setDeleteLoading(false)
       setDeleteTarget(null)
@@ -275,6 +278,7 @@ interface FleetDialogProps {
 
 function FleetDialog({ open, onOpenChange, customerId, entry, onSaved }: FleetDialogProps) {
   const { toast } = useToast()
+  const queryClient = useQueryClient()
   const [loading, setLoading] = useState(false)
   const isEdit = !!entry
 
@@ -299,6 +303,7 @@ function FleetDialog({ open, onOpenChange, customerId, entry, onSaved }: FleetDi
   }, [selectedType, isEdit, form])
 
   async function onSubmit(values: FleetFormValues) {
+    if (loading) return
     setLoading(true)
     try {
       const { _type, model, registered_weight, trailer_type, ...common } = values
@@ -327,14 +332,17 @@ function FleetDialog({ open, onOpenChange, customerId, entry, onSaved }: FleetDi
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })
-      const json = await res.json()
-      if (!json.success) throw new Error(json.error ?? 'Request failed')
+      const data = await parseApiResponse<TruckRow | TrailerRow>(res, 'Failed to save vehicle')
 
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['trucks', customerId] }),
+        queryClient.invalidateQueries({ queryKey: ['trailers', customerId] }),
+      ])
       toast({ title: isEdit ? 'Vehicle updated' : 'Vehicle added' })
-      onSaved({ _type, ...json.data } as FleetEntry)
+      onSaved({ _type, ...data } as FleetEntry)
       form.reset(blankFormValues('truck'))
     } catch (err) {
-      toast({ title: 'Error', description: String(err), variant: 'destructive' })
+      toast({ title: 'Error', description: getThrownMessage(err), variant: 'destructive' })
     } finally {
       setLoading(false)
     }

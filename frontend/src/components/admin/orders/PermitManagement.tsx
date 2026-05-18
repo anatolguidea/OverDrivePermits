@@ -1,6 +1,8 @@
 'use client'
 import { useState, useRef } from 'react'
-import { csrfFetch } from '@/lib/http/client'
+import { useQueryClient } from '@tanstack/react-query'
+import { csrfFetch, getThrownMessage, parseApiResponse } from '@/lib/http/client'
+import { invalidateAdminLiveData } from '@/lib/queries/invalidation'
 import {
   DndContext,
   closestCenter,
@@ -68,6 +70,7 @@ const TRANSITIONS: Record<PermitStatus, { label: string; to: PermitStatus }[]> =
 
 export function PermitManagement({ orderId, initialPermits, documentSignedUrls }: PermitManagementProps) {
   const { toast } = useToast()
+  const queryClient = useQueryClient()
   const [permits, setPermits] = useState(() =>
     [...initialPermits].sort((a, b) => a.sort_order - b.sort_order)
   )
@@ -89,12 +92,12 @@ export function PermitManagement({ orderId, initialPermits, documentSignedUrls }
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: to }),
       })
-      const json = await res.json()
-      if (!json.success) throw new Error(json.error)
-      updateLocal(permit.id, json.data)
+      const data = await parseApiResponse<PermitManagementRow>(res, 'Failed to update permit status')
+      updateLocal(permit.id, data)
+      await invalidateAdminLiveData(queryClient)
       toast({ title: `${permit.jurisdiction} marked ${to.replace('_', ' ')}` })
     } catch (err) {
-      toast({ title: 'Error', description: String(err), variant: 'destructive' })
+      toast({ title: 'Error', description: getThrownMessage(err), variant: 'destructive' })
     }
   }
 
@@ -105,11 +108,11 @@ export function PermitManagement({ orderId, initialPermits, documentSignedUrls }
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ permit_number: value }),
       })
-      const json = await res.json()
-      if (!json.success) throw new Error(json.error)
+      await parseApiResponse(res, 'Failed to save permit number')
       updateLocal(permit.id, { permit_number: value || null })
+      await invalidateAdminLiveData(queryClient)
     } catch (err) {
-      toast({ title: 'Error', description: String(err), variant: 'destructive' })
+      toast({ title: 'Error', description: getThrownMessage(err), variant: 'destructive' })
     }
   }
 
@@ -123,11 +126,13 @@ export function PermitManagement({ orderId, initialPermits, documentSignedUrls }
     setPermits(reordered)
 
     try {
-      await csrfFetch(`/api/admin/orders/${orderId}/permits/reorder`, {
+      const res = await csrfFetch(`/api/admin/orders/${orderId}/permits/reorder`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ order: reordered.map((p) => p.id) }),
       })
+      if (!res.ok) throw new Error('Failed to reorder permits')
+      await invalidateAdminLiveData(queryClient)
     } catch {
       // revert on failure
       setPermits(permits)
@@ -195,33 +200,38 @@ function PermitRow({
   dragHandleProps,
 }: PermitRowProps & { dragHandleProps?: React.HTMLAttributes<HTMLButtonElement> }) {
   const { toast } = useToast()
+  const queryClient = useQueryClient()
   const [transitioning, setTransitioning] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [permitNumberDraft, setPermitNumberDraft] = useState(permit.permit_number ?? '')
   const fileRef = useRef<HTMLInputElement>(null)
 
   async function handleTransition(to: PermitStatus) {
+    if (transitioning) return
     setTransitioning(true)
     await onTransition(permit, to)
     setTransitioning(false)
   }
 
   async function handleUpload(file: File) {
+    if (uploading) return
     setUploading(true)
     try {
       const fd = new FormData()
       fd.append('file', file)
       const res = await csrfFetch(`/api/admin/permits/${permit.id}/upload`, { method: 'POST', body: fd })
-      const json = await res.json()
-      if (!json.success) throw new Error(json.error)
+      const data = await parseApiResponse<PermitManagementRow>(res, 'Failed to upload document')
 
       const urlRes = await fetch(`/api/admin/permits/${permit.id}/signed-url`)
-      const urlJson = urlRes.ok ? await urlRes.json() : null
+      const urlJson = urlRes.ok
+        ? await parseApiResponse<{ signedUrl: string }>(urlRes, 'Failed to load document link')
+        : null
 
-      onUploaded(json.data, urlJson?.signedUrl)
+      onUploaded(data, urlJson?.signedUrl)
+      await invalidateAdminLiveData(queryClient)
       toast({ title: `Document uploaded for ${permit.jurisdiction}` })
     } catch (err) {
-      toast({ title: 'Upload failed', description: String(err), variant: 'destructive' })
+      toast({ title: 'Upload failed', description: getThrownMessage(err), variant: 'destructive' })
     } finally {
       setUploading(false)
     }
